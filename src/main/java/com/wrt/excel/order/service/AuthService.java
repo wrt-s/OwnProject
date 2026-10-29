@@ -213,6 +213,26 @@ public class AuthService {
         if (isChefSession(session)) {
             return clientUserId;
         }
+        // 点单方传入他人 id：忽略，始终用 Session
         return sid;
+    }
+
+    /**
+     * 爱心币读写：点单方强制 Session；做餐方只能操作同一家庭的成员。
+     */
+    public Long resolveCoinTarget(HttpSession session, Long clientUserId) {
+        Long sid = requireSessionUserId(session);
+        if (clientUserId == null || Objects.equals(clientUserId, sid)) {
+            return sid;
+        }
+        if (!isChefSession(session)) {
+            return sid;
+        }
+        User target = userMapper.selectById(clientUserId);
+        if (target == null) {
+            throw new IllegalArgumentException("用户不存在");
+        }
+        assertSameFamily(target.getFamilyId(), session);
+        return target.getId();
     }
 }

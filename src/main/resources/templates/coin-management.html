@@ -85,7 +85,7 @@
     </div>
     <div class="lp-field"><label>数量</label><input id="addAmount" type="number" min="1" placeholder="爱心币数量"></div>
     <div class="lp-field"><label>备注</label><input id="addRemark" type="text" placeholder="可选"></div>
-    <button class="lp-btn block" type="button" onclick="confirmAdd()">确认</button>
+    <button class="lp-btn block" id="addConfirmBtn" type="button" onclick="confirmAdd()">确认</button>
   </div>
 </div>
 <div class="lp-modal-mask" id="useModal" onclick="if(event.target===this)closeUseModal()">
@@ -101,7 +101,7 @@
     </div>
     <div class="lp-field"><label>数量</label><input id="useAmount" type="number" min="1" placeholder="爱心币数量"></div>
     <div class="lp-field"><label>备注</label><input id="useRemark" type="text" placeholder="可选"></div>
-    <button class="lp-btn block" type="button" onclick="confirmUse()">确认使用</button>
+    <button class="lp-btn block" id="useConfirmBtn" type="button" onclick="confirmUse()">确认使用</button>
   </div>
 </div>
 
@@ -113,6 +113,7 @@
 <script>
 
 let userId = null;
+let coinBusy = false;
 /** 爱心币目标用户：ORDERER=自己；CHEF=家庭点单方 */
 let coinTargetUserId = null;
 let coinTargetNickname = '';
@@ -207,34 +208,67 @@ async function loadTransactions() {
     box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>';
   }
 }
+function lockCoinBtn(id, text) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.disabled = true;
+  btn.dataset.label = btn.dataset.label || btn.textContent;
+  btn.textContent = text;
+}
+function unlockCoinBtn(id) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.disabled = false;
+  if (btn.dataset.label) btn.textContent = btn.dataset.label;
+}
 async function confirmAdd() {
+  if (coinBusy) return;
   if (!LovePage.isChef()) { LovePage.toast('仅做餐方可发放爱心币'); return; }
   const amount = Number(document.getElementById('addAmount').value);
   const type = document.getElementById('addType').value;
   const remark = document.getElementById('addRemark').value.trim();
   if (!amount || amount <= 0) { LovePage.toast('请输入数量'); return; }
+  coinBusy = true;
+  lockCoinBtn('addConfirmBtn', '提交中…');
   try {
     const r = await LovePage.api('/api/coin/add', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: coinTargetUserId || userId, amount, type, description: remark || type, remark })
     });
-    if (r.code === 200) { LovePage.toast('操作成功'); closeAddModal(); loadBalance(); loadTransactions(); }
-    else LovePage.toast(r.message || '失败');
+    if (r.code === 200) {
+      document.getElementById('addAmount').value = '';
+      document.getElementById('addRemark').value = '';
+      closeAddModal();
+      LovePage.toast('发放成功');
+      await loadBalance();
+      await loadTransactions();
+    } else LovePage.toast(r.message || '失败');
   } catch (e) { LovePage.toast('网络错误'); }
+  finally { coinBusy = false; unlockCoinBtn('addConfirmBtn'); }
 }
 async function confirmUse() {
+  if (coinBusy) return;
   const amount = Number(document.getElementById('useAmount').value);
   const type = document.getElementById('useType').value;
   const remark = document.getElementById('useRemark').value.trim();
   if (!amount || amount <= 0) { LovePage.toast('请输入数量'); return; }
+  coinBusy = true;
+  lockCoinBtn('useConfirmBtn', '提交中…');
   try {
     const r = await LovePage.api('/api/coin/use', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: coinTargetUserId || userId, amount, type, description: remark || type, remark })
     });
-    if (r.code === 200) { LovePage.toast('使用成功'); closeUseModal(); loadBalance(); loadTransactions(); }
-    else LovePage.toast(r.message || '失败');
+    if (r.code === 200) {
+      document.getElementById('useAmount').value = '';
+      document.getElementById('useRemark').value = '';
+      closeUseModal();
+      LovePage.toast('使用成功');
+      await loadBalance();
+      await loadTransactions();
+    } else LovePage.toast(r.message || '失败');
   } catch (e) { LovePage.toast('网络错误'); }
+  finally { coinBusy = false; unlockCoinBtn('useConfirmBtn'); }
 }
 window.__afterAuth = async () => {
   const isChef = LovePage.isChef();

@@ -102,11 +102,12 @@ async function loadHistory() {
     const arr = Array.isArray(list) ? list : [];
     if (!arr.length) { box.innerHTML = '<div class="lp-empty"><div class="ico">📝</div><p>暂无记录</p></div>'; return; }
     box.innerHTML = arr.slice(0,30).map(h => {
-      const win = h.win || h.isWin || h.result === 'WIN';
-      const amt = h.amount ?? h.betAmount ?? 0;
-      const payout = h.payout ?? h.winAmount ?? 0;
+      const win = h.win === true || h.isWin === 1 || h.isWin === true || h.result === 'WIN';
+      const amt = h.betAmount ?? h.amount ?? 0;
+      const payout = h.rewardAmount ?? h.payout ?? h.winAmount ?? 0;
+      const point = h.diceResult ?? h.dice ?? h.point ?? '-';
       const time = (h.createTime || h.createdAt || '').toString().slice(0,16).replace('T',' ');
-      return `<div class="lp-item"><div class="row"><span class="title">${win?'赢':'输'} · ${LovePage.escapeHtml(betTypeLabel(h.betType||h.type||''))}</span><span style="font-weight:800;color:${win?'var(--ok)':'var(--danger)'}">${win?'+':'-'}${win?payout:amt}</span></div><div class="meta">${LovePage.escapeHtml(time)} · 点数 ${h.dice??h.point??'-'}</div></div>`;
+      return `<div class="lp-item"><div class="row"><span class="title">${win?'赢':'输'} · ${LovePage.escapeHtml(betTypeLabel(h.betType||h.type||''))}</span><span style="font-weight:800;color:${win?'var(--ok)':'var(--danger)'}">${win?'+':'-'}${win?payout:amt}</span></div><div class="meta">${LovePage.escapeHtml(time)} · 点数 ${point}</div></div>`;
     }).join('');
   } catch(e){ box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>'; }
 }
@@ -126,10 +127,11 @@ async function placeBet() {
     });
     if (r.code === 200 || r.success) {
       const d = r.data || r;
-      const point = d.dice ?? d.point ?? d.resultPoint;
+      const point = d.diceResult ?? d.dice ?? d.point ?? d.resultPoint;
       dice.textContent = '🎲 ' + (point != null ? point : '');
-      const win = d.win || d.isWin || d.result === 'WIN';
-      LovePage.toast(win ? `赢了！+${d.payout ?? d.winAmount ?? amount}` : `没中，点数 ${point ?? '-'}`);
+      const win = d.win === true || d.isWin === 1 || d.isWin === true || d.result === 'WIN';
+      const payout = d.rewardAmount ?? d.payout ?? d.winAmount ?? amount;
+      LovePage.toast(win ? `赢了！+${payout}` : `没中，点数 ${point ?? '-'}`);
       await loadBalance(); await loadStats(); await loadHistory();
     } else LovePage.toast(r.message || '押注失败');
   } catch(e){ LovePage.toast('网络错误'); }

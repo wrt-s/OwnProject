@@ -3,6 +3,7 @@ package com.wrt.excel.order.controller;
 import com.wrt.excel.order.entity.Dish;
 import com.wrt.excel.order.service.AuthService;
 import com.wrt.excel.order.service.FavoriteService;
+import com.wrt.excel.system.service.FileUploadService;
 import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,9 @@ public class FavoriteController {
     
     @Autowired
     private FavoriteService favoriteService;
+
+    @Autowired(required = false)
+    private FileUploadService fileUploadService;
     
     @PostMapping("/add")
     public Map<String, Object> addFavorite(@RequestBody Map<String, Long> params, HttpSession session) {
@@ -68,6 +72,13 @@ public class FavoriteController {
         try {
             Long familyId = AuthService.requireFamilyId(session);
             List<Dish> favorites = favoriteService.getUserFavorites(familyId);
+            if (favorites != null && fileUploadService != null) {
+                for (Dish dish : favorites) {
+                    if (dish != null) {
+                        dish.setImageUrl(fileUploadService.toReadableUrl(dish.getImageUrl()));
+                    }
+                }
+            }
             result.put("code", 200);
             result.put("message", "success");
             result.put("data", favorites);

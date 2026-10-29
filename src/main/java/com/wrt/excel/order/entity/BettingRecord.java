@@ -2,6 +2,7 @@ package com.wrt.excel.order.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import java.io.Serializable;
 import java.time.LocalDateTime;
@@ -77,4 +78,31 @@ public class BettingRecord implements Serializable {
     @TableField(fill = FieldFill.INSERT)
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Shanghai")
     private LocalDateTime createdAt;
+
+    /** 历史列表兼容字段：点数 */
+    @JsonProperty("dice")
+    public Integer getDice() {
+        return diceResult;
+    }
+
+    @JsonProperty("point")
+    public Integer getPoint() {
+        return diceResult;
+    }
+
+    /** 历史列表兼容字段：赢的派彩（不是 0） */
+    @JsonProperty("payout")
+    public Integer getPayout() {
+        return rewardAmount;
+    }
+
+    @JsonProperty("winAmount")
+    public Integer getWinAmount() {
+        return rewardAmount;
+    }
+
+    @JsonProperty("win")
+    public Boolean getWin() {
+        return isWin != null && isWin == 1;
+    }
 }

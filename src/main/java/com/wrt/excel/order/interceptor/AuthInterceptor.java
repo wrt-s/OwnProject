@@ -10,6 +10,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import java.io.IOException;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -19,7 +21,8 @@ import java.util.Set;
  * 简易鉴权：
  * - 公开：登录、菜品/分类只读、静态资源
  * - 需登录：下单、取消、玩法、币操作等（业务层再用 Session 覆盖 client userId）
- * - 做餐方 CHEF：订单状态变更、看板、操作日志、加币；菜品/分类写对点单方开放
+ * - 做餐方 CHEF：订单状态变更、看板、操作日志、加币、菜品写
+ * - 点单方：菜品只读；看板返回 403 页面
  */
 @Component
 @RequiredArgsConstructor
@@ -45,28 +48,26 @@ public class AuthInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        // 非 /api 由页面路由/静态资源处理
-        // /admin：登录即可（点单方也可维护菜品）；/dashboard：仅做餐方
+        // 非 /api：页面必须登录（地址栏跳到 /login）；看板/家人位置仅做餐方
         if (!path.startsWith("/api/")) {
-            if (path.equals("/admin") || path.startsWith("/admin/")) {
-                HttpSession session = request.getSession(false);
-                if (session == null || AuthService.sessionUserId(session) == null) {
-                    response.sendRedirect("/login");
-                    return false;
-                }
+            if (path.equals("/actuator/health") || path.startsWith("/actuator/health/")) {
                 return true;
             }
-            if (path.equals("/dashboard") || path.startsWith("/dashboard/")
-                    || path.equals("/family-location") || path.startsWith("/family-location/")) {
-                HttpSession session = request.getSession(false);
-                if (session == null || AuthService.sessionUserId(session) == null) {
-                    response.sendRedirect("/login");
-                    return false;
-                }
-                if (!AuthService.isChefSession(session)) {
-                    response.sendRedirect("/?denied=chef");
-                    return false;
-                }
+            if (path.startsWith("/actuator")) {
+                writeJson(response, 401, "未授权");
+                return false;
+            }
+            HttpSession session = request.getSession(false);
+            if (session == null || AuthService.sessionUserId(session) == null) {
+                String query = request.getQueryString();
+                String target = path + (query == null || query.isBlank() ? "" : "?" + query);
+                String next = URLEncoder.encode(target, StandardCharsets.UTF_8);
+                response.sendRedirect("/login?redirect=" + next);
+                return false;
+            }
+            if (isChefOnlyPage(path) && !AuthService.isChefSession(session)) {
+                writeHtmlDenied(response, chefDenyMessage(path));
+                return false;
             }
             return true;
         }
@@ -117,13 +118,25 @@ public class AuthInterceptor implements HandlerInterceptor {
         return false;
     }
 
+    private boolean isChefOnlyPage(String path) {
+        return path.equals("/dashboard") || path.startsWith("/dashboard/")
+                || path.equals("/family-location") || path.startsWith("/family-location/");
+    }
+
+    private String chefDenyMessage(String path) {
+        if (path.startsWith("/family-location")) {
+            return "仅做餐方可查看家人位置";
+        }
+        return "仅做餐方可查看数据看板";
+    }
+
     private boolean requiresChef(String path, String method) {
         // 订单状态 & 全量订单 & 看板
         if (path.equals("/api/order/status") || path.equals("/api/order/list")) return true;
         if (path.startsWith("/api/order/dashboard")) return true;
 
-        // 菜品/分类写操作：点单方与做餐方均可（情侣共同维护菜单）
-        // （不再 requireChef）
+        // 菜品写：仅做餐方。点单方只读。
+        if (isDishWrite(path, method)) return true;
 
         // 给他人加币仅做餐方
         if (path.equals("/api/coin/add")) {
@@ -152,6 +165,40 @@ public class AuthInterceptor implements HandlerInterceptor {
             return true;
         }
         return false;
+    }
+
+    private boolean isDishWrite(String path, String method) {
+        if (method == null || "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method)) {
+            return false;
+        }
+        return path.equals("/api/dish/add")
+                || path.equals("/api/dish/update")
+                || path.equals("/api/dish/toggleSoldOut")
+                || path.equals("/api/dish/uploadImage")
+                || path.equals("/api/dish/clearImage")
+                || path.startsWith("/api/dish/delete/")
+                || (path.startsWith("/api/dish/") && path.endsWith("/image"));
+    }
+
+    private void writeHtmlDenied(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(403);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType("text/html;charset=UTF-8");
+        String safe = message == null ? "无权访问" : message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        response.getWriter().write("""
+                <!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width,initial-scale=1">
+                <title>无权访问 · Love</title>
+                <style>
+                body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+                background:#FCE8EE;color:#2C292A;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+                .card{background:#fff;border:1px solid #F3D5DC;border-radius:18px;padding:28px 22px;max-width:360px;text-align:center}
+                h1{font-size:18px;margin:8px 0} p{font-size:14px;line-height:1.5;color:#6b6466}
+                a{display:inline-block;margin-top:16px;background:#E85A7A;color:#fff;text-decoration:none;
+                padding:10px 18px;border-radius:999px;font-weight:700}
+                </style></head><body><div class="card"><div style="font-size:40px">🚫</div>
+                <h1>无权访问</h1><p>%s</p><a href="/">返回首页</a></div></body></html>
+                """.formatted(safe));
     }
 
     private void writeJson(HttpServletResponse response, int code, String message) throws Exception {

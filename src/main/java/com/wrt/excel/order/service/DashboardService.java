@@ -7,6 +7,7 @@ import com.wrt.excel.order.entity.OrderItem;
 import com.wrt.excel.order.mapper.DishMapper;
 import com.wrt.excel.order.mapper.OrderItemMapper;
 import com.wrt.excel.order.mapper.OrderMapper;
+import com.wrt.excel.system.service.FileUploadService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,9 @@ public class DashboardService {
     @Autowired
     private DishMapper dishMapper;
 
+    @Autowired(required = false)
+    private FileUploadService fileUploadService;
+
     /**
      * 获取订单量趋势（每日/每周/每月）
      */
@@ -51,6 +55,7 @@ public class DashboardService {
             List<Order> orders = orderMapper.selectList(wrapper);
 
             Map<String, Long> dateCountMap = orders.stream()
+                    .filter(o -> o.getCreatedAt() != null)
                     .collect(Collectors.groupingBy(
                             o -> o.getCreatedAt().toLocalDate().format(DateTimeFormatter.ofPattern("MM-dd")),
                             Collectors.counting()
@@ -100,6 +105,7 @@ public class DashboardService {
         }
 
         result.put("trend", trendData);
+        putChartSeries(result, trendData, "count");
         return result;
     }
 
@@ -142,7 +148,11 @@ public class DashboardService {
                     if (dish != null) {
                         item.put("id", dish.getId());
                         item.put("name", dish.getName());
-                        item.put("imageUrl", dish.getImageUrl());
+                        String image = dish.getImageUrl();
+                        if (fileUploadService != null) {
+                            image = fileUploadService.toReadableUrl(image);
+                        }
+                        item.put("imageUrl", image);
                         item.put("count", entry.getValue());
                     }
                     return item;
@@ -151,6 +161,7 @@ public class DashboardService {
                 .collect(Collectors.toList());
 
         result.put("dishes", popularDishes);
+        result.put("list", popularDishes);
         return result;
     }
 
@@ -171,6 +182,7 @@ public class DashboardService {
         timeSlotCount.put("night", 0L);      // 22:00-6:00
 
         for (Order order : orders) {
+            if (order.getCreatedAt() == null) continue;
             int hour = order.getCreatedAt().getHour();
             if (hour >= 6 && hour < 12) {
                 timeSlotCount.put("morning", timeSlotCount.get("morning") + 1);
@@ -221,14 +233,14 @@ public class DashboardService {
             return result;
         }
 
-        // 总金额
-        int totalAmount = orders.stream().mapToInt(Order::getTotalPrice).sum();
+        // 总金额（爱心币；空价格按 0）
+        int totalAmount = orders.stream().mapToInt(o -> o.getTotalPrice() == null ? 0 : o.getTotalPrice()).sum();
         
         // 平均金额
         double averageAmount = totalAmount / (double) orders.size();
         
         // 最大单笔金额
-        int maxAmount = orders.stream().mapToInt(Order::getTotalPrice).max().orElse(0);
+        int maxAmount = orders.stream().mapToInt(o -> o.getTotalPrice() == null ? 0 : o.getTotalPrice()).max().orElse(0);
 
         // 最近7天每日消费统计
         LocalDateTime now = LocalDateTime.now();
@@ -245,7 +257,7 @@ public class DashboardService {
                     .lt(Order::getCreatedAt, dayEnd);
             List<Order> dayOrders = orderMapper.selectList(dayWrapper);
             
-            int dayAmount = dayOrders.stream().mapToInt(Order::getTotalPrice).sum();
+            int dayAmount = dayOrders.stream().mapToInt(o -> o.getTotalPrice() == null ? 0 : o.getTotalPrice()).sum();
             
             Map<String, Object> dayStat = new HashMap<>();
             dayStat.put("date", date.format(DateTimeFormatter.ofPattern("MM-dd")));
@@ -259,7 +271,30 @@ public class DashboardService {
         result.put("maxAmount", maxAmount);
         result.put("orderCount", orders.size());
         result.put("dailyStats", dailyStats);
+        putChartSeries(result, dailyStats, "amount");
 
         return result;
+    }
+
+    private void putChartSeries(Map<String, Object> result, List<Map<String, Object>> rows, String valueKey) {
+        List<String> labels = new ArrayList<>();
+        List<Number> values = new ArrayList<>();
+        if (rows != null) {
+            for (Map<String, Object> row : rows) {
+                Object date = row.get("date");
+                labels.add(date == null ? "" : String.valueOf(date));
+                Object value = row.get(valueKey);
+                values.add(value instanceof Number number ? number : 0);
+            }
+        }
+        result.put("labels", labels);
+        result.put("dates", labels);
+        result.put("values", values);
+        if ("count".equals(valueKey)) {
+            result.put("counts", values);
+        }
+        if ("amount".equals(valueKey)) {
+            result.put("amounts", values);
+        }
     }
 }

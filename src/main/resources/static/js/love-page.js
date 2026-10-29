@@ -64,6 +64,18 @@
       return !!(u && (u.role === 'CHEF' || u.role === 'ADMIN'));
     },
 
+    formatOrderPrice: function (o) {
+      if (!o) return '0 爱心币';
+      if (o.priceSummary) return o.priceSummary;
+      const pt = String(o.priceType || '').trim();
+      if (/\d/.test(pt) && (pt.includes('+') || pt.includes('币') || pt.includes('亲') || pt.includes('抱'))) {
+        return pt.replace(/\+/g, ' + ');
+      }
+      const total = o.totalPrice ?? o.totalAmount ?? o.amount ?? 0;
+      if (pt === '多币种') return '多币种';
+      return total + ' ' + (pt || '爱心币');
+    },
+
     back: function (fallback) {
       // Use window.history so page scripts cannot shadow History API
       // (ai-chat previously used let history = [] for chat messages).
