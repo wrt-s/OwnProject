@@ -24,7 +24,10 @@
   background:linear-gradient(135deg,#FFF7F9,#FFE8EF);
   display:flex; align-items:center; justify-content:center;
   font-size:16px; flex-shrink:0; border:1px solid var(--rose-line,#F3D5DC);
+  overflow:hidden;
 }
+.xb-av.has-photo { padding:0; font-size:0; }
+.xb-av img { width:100%; height:100%; object-fit:cover; display:block; }
 .xb-bubble {
   padding:10px 12px; border-radius:16px; font-size:14px; line-height:1.45;
   word-break:break-word; white-space:pre-wrap;
@@ -105,16 +108,39 @@ function loadLocal() {
 function saveLocal() {
   try { localStorage.setItem(LS_KEY, JSON.stringify(chatHistory.slice(-12))); } catch (e) {}
 }
+function userAvatarNode() {
+  const av = document.createElement('div');
+  av.className = 'xb-av';
+  const u = (LovePage.getCurrentUser && LovePage.getCurrentUser()) || null;
+  const url = u && u.avatarUrl;
+  if (url) {
+    av.classList.add('has-photo');
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = url;
+    av.appendChild(img);
+  } else {
+    const nick = u && u.nickname ? String(u.nickname).trim() : '';
+    av.textContent = nick ? nick.charAt(0) : '我';
+  }
+  return av;
+}
 function appendBubble(role, text) {
   const box = document.getElementById('xbMsgs');
   const row = document.createElement('div');
   row.className = 'xb-row ' + (role === 'user' ? 'me' : 'bot');
+  const bubble = document.createElement('div');
+  bubble.className = 'xb-bubble';
+  bubble.textContent = text;
   if (role === 'assistant') {
-    row.innerHTML = '<div class="xb-av">🐰</div><div class="xb-bubble"></div>';
+    const av = document.createElement('div');
+    av.className = 'xb-av';
+    av.textContent = '🐰';
+    row.appendChild(av);
   } else {
-    row.innerHTML = '<div class="xb-bubble"></div>';
+    row.appendChild(userAvatarNode());
   }
-  row.querySelector('.xb-bubble').textContent = text;
+  row.appendChild(bubble);
   box.appendChild(row);
   box.scrollTop = box.scrollHeight;
 }

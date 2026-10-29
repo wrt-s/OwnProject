@@ -2,6 +2,7 @@ package com.wrt.excel.order.service;
 
 import com.wrt.excel.order.entity.User;
 import com.wrt.excel.order.mapper.UserMapper;
+import com.wrt.excel.system.service.FileUploadService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import lombok.Data;
@@ -27,6 +28,9 @@ public class OnlineUserService {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired(required = false)
+    private FileUploadService fileUploadService;
 
     private final Map<Long, OnlineInfo> onlineByUser = new ConcurrentHashMap<>();
     private final Map<String, LocalDateTime> anonymousSessions = new ConcurrentHashMap<>();
@@ -144,6 +148,9 @@ public class OnlineUserService {
                 if (!User.ROLE_ORDERER.equals(r)) continue;
                 OnlineInfo live = onlineByUser.get(u.getId());
                 if (live != null) {
+                    if (u.getNickname() != null && !u.getNickname().isBlank()) {
+                        live.setNickname(u.getNickname());
+                    }
                     ordererMap.put(u.getId(), live);
                 } else {
                     OnlineInfo stub = new OnlineInfo();
@@ -215,6 +222,7 @@ public class OnlineUserService {
         Map<String, Object> m = new HashMap<>();
         m.put("userId", info.getUserId());
         m.put("nickname", info.getNickname());
+        attachAvatar(m, info.getUserId());
         String role = info.getRole() != null ? info.getRole() : User.ROLE_ORDERER;
         if ("ADMIN".equalsIgnoreCase(role)) role = User.ROLE_CHEF;
         if ("USER".equalsIgnoreCase(role)) role = User.ROLE_ORDERER;
@@ -255,6 +263,23 @@ public class OnlineUserService {
         onlineByUser.entrySet().removeIf(e -> e.getValue().getLastSeen() == null
                 || e.getValue().getLastSeen().isBefore(thirtyMinutesAgo));
         anonymousSessions.entrySet().removeIf(e -> e.getValue().isBefore(thirtyMinutesAgo));
+    }
+
+    private void attachAvatar(Map<String, Object> m, Long userId) {
+        if (m == null || userId == null || userMapper == null) return;
+        try {
+            User u = userMapper.selectById(userId);
+            if (u == null || u.getAvatarUrl() == null || u.getAvatarUrl().isBlank()) return;
+            String url = u.getAvatarUrl();
+            if (fileUploadService != null) {
+                url = fileUploadService.toReadableUrl(url);
+            }
+            if (url != null && !url.isBlank()) {
+                m.put("avatarUrl", url);
+            }
+        } catch (Exception ignore) {
+            // 头像缺失不影响在线状态
+        }
     }
 
     private void checkAndResetDailyStats() {

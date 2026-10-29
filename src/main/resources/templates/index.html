@@ -7,13 +7,13 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#FCE8EE">
     <title>Love · 恋爱点单</title>
-    <link rel="stylesheet" href="/css/love.css?v=qa-fixes1">
+    <link rel="stylesheet" href="/css/love.css?v=profile1">
 </head>
 <body>
 <div class="app">
     <header class="app-header">
         <div class="brand">
-            <div class="brand-mark" aria-hidden="true">💕</div>
+            <a class="brand-mark" id="headerAvatar" href="/profile" aria-label="个人资料">💕</a>
             <div class="brand-text">
                 <div class="brand-name" id="headerTitle">Love</div>
                 <div class="brand-sub" id="headerSub">点一份爱意给 TA</div>
@@ -152,7 +152,7 @@
         <!-- 我的 -->
         <section class="page" id="page-mine" aria-label="我的">
             <div class="mine-hero">
-                <div class="avatar">💕</div>
+                <a class="avatar" id="mineAvatar" href="/profile" aria-label="编辑个人资料">💕</a>
                 <div class="uname" id="mineNickname">Love 用户</div>
                 <div class="role-badge orderer" id="mineRoleBadge">🍜 点单方</div>
                 <div class="ubal">💖 爱心币 <span data-coin>0</span></div>
@@ -179,6 +179,9 @@
             <div class="mine-group">
                 <div class="mine-group-title">账户</div>
                 <div class="mine-list">
+                    <a class="mine-item" href="/profile">
+                        <span class="ico">👤</span><span class="label">个人资料</span><span class="arrow">›</span>
+                    </a>
                     <a class="mine-item" href="/coin-management">
                         <span class="ico">💖</span><span class="label">爱心币</span><span class="arrow">›</span>
                     </a>
@@ -192,6 +195,7 @@
                 <div class="mine-group-title">点单方状态</div>
                 <div class="lp-card" id="partnerOnlineCard" style="margin:0 0 8px;padding:14px 16px">
                     <div style="display:flex;align-items:center;gap:10px">
+                        <span class="person-avatar" id="partnerOnlineAvatar" aria-hidden="true">🍜</span>
                         <span id="partnerOnlineDot" style="width:10px;height:10px;border-radius:50%;background:#bbb;display:inline-block;flex-shrink:0"></span>
                         <div style="flex:1;min-width:0">
                             <div style="font-weight:700" id="partnerOnlineName">点单方</div>
@@ -308,6 +312,6 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/js/love-app-notify.js?v=nonotify1"></script>
-<script src="/js/love.js?v=qa-fixes1"></script>
+<script src="/js/love.js?v=profile1"></script>
 </body>
 </html>

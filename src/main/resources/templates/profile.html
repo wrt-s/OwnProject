@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FCE8EE">
+<title>个人资料 · Love</title>
+<link rel="stylesheet" href="/css/love.css?v=profile1">
+<style>
+.profile-avatar-wrap { text-align: center; padding: 8px 0 4px; }
+.profile-avatar {
+  width: 88px; height: 88px; margin: 0 auto;
+  border-radius: 28px;
+  background: #fff;
+  border: 1px solid var(--rose-line, #F3D5DC);
+  box-shadow: var(--shadow);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 40px; overflow: hidden; cursor: pointer;
+}
+.profile-avatar.has-photo { font-size: 0; }
+.profile-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.profile-avatar-hint { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.profile-phone {
+  font-size: 15px; font-weight: 650; color: var(--text);
+  padding: 11px 12px; background: #F7F4F5; border-radius: 14px;
+}
+.profile-actions { display: flex; gap: 8px; margin-top: 4px; }
+.profile-actions .lp-btn { flex: 1; }
+</style>
+</head>
+<body>
+<div class="app subpage">
+  <header class="sub-header">
+    <button type="button" class="back-btn" onclick="LovePage.back('/')" aria-label="返回">‹</button>
+    <div class="sub-title">个人资料</div>
+  </header>
+  <main class="sub-body">
+    <div class="lp-card">
+      <div class="profile-avatar-wrap">
+        <button type="button" class="profile-avatar" id="avatarBtn" aria-label="更换头像">💕</button>
+        <div class="profile-avatar-hint">点击头像更换，会裁成正方形</div>
+        <input id="avatarFile" type="file" accept="image/*" hidden>
+      </div>
+    </div>
+
+    <div class="lp-card">
+      <h3>账号</h3>
+      <div class="lp-field">
+        <label>登录手机号</label>
+        <div class="profile-phone" id="phoneText">—</div>
+      </div>
+      <div class="lp-field">
+        <label>身份</label>
+        <div class="profile-phone" id="roleText">—</div>
+      </div>
+      <div class="lp-field">
+        <label for="nicknameInput">昵称</label>
+        <input id="nicknameInput" type="text" maxlength="20" placeholder="怎么称呼你" autocomplete="nickname">
+      </div>
+      <button type="button" class="lp-btn" id="nickBtn" style="width:100%" onclick="saveNickname()">保存昵称</button>
+    </div>
+
+    <div class="lp-card">
+      <h3>修改密码</h3>
+      <div class="lp-field">
+        <label for="curPwd">当前密码</label>
+        <input id="curPwd" type="password" autocomplete="current-password" placeholder="请输入当前密码">
+      </div>
+      <div class="lp-field">
+        <label for="newPwd">新密码</label>
+        <input id="newPwd" type="password" autocomplete="new-password" placeholder="6～32 位">
+      </div>
+      <div class="lp-field">
+        <label for="confirmPwd">确认新密码</label>
+        <input id="confirmPwd" type="password" autocomplete="new-password" placeholder="再输入一次">
+      </div>
+      <button type="button" class="lp-btn" id="pwdBtn" style="width:100%" onclick="savePassword()">确认修改</button>
+      <div class="profile-avatar-hint" style="text-align:left;margin-top:10px">修改成功后保持登录，下次请使用新密码。</div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/love-page.js?v=profile1"></script>
+<script>
+function paintAvatar(url) {
+  const el = document.getElementById('avatarBtn');
+  if (!el) return;
+  while (el.firstChild) el.removeChild(el.firstChild);
+  el.classList.toggle('has-photo', !!url);
+  if (url) {
+    const img = document.createElement('img');
+    img.alt = '头像';
+    img.src = url;
+    el.appendChild(img);
+  } else {
+    el.textContent = '💕';
+  }
+}
+
+function applyUser(data) {
+  if (!data) return;
+  const u = LovePage.normalizeUser(data);
+  LovePage.currentUser = u;
+  LovePage.persistUser(u);
+  const nick = document.getElementById('nicknameInput');
+  if (nick && document.activeElement !== nick) nick.value = u.nickname || '';
+  const phone = document.getElementById('phoneText');
+  if (phone) phone.textContent = u.phone || '—';
+  const role = document.getElementById('roleText');
+  if (role) role.textContent = (u.role === 'CHEF' ? '👨‍🍳 ' : '🍜 ') + (u.roleLabel || '');
+  paintAvatar(u.avatarUrl);
+}
+
+async function saveNickname() {
+  const input = document.getElementById('nicknameInput');
+  const nickname = (input.value || '').trim();
+  if (!nickname) { LovePage.toast('请输入昵称'); return; }
+  if ([...nickname].length > 20) { LovePage.toast('昵称最多 20 个字'); return; }
+  const btn = document.getElementById('nickBtn');
+  btn.disabled = true;
+  try {
+    const r = await LovePage.api('/api/auth/profile/nickname', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname })
+    });
+    if (r.code === 401) { location.replace('/login?redirect=' + encodeURIComponent('/profile')); return; }
+    if (r.code === 200) {
+      applyUser(r.data);
+      LovePage.toast('昵称已更新');
+    } else {
+      LovePage.toast(r.message || '保存失败');
+    }
+  } catch (e) {
+    if (String(e && e.message) !== 'unauthorized') LovePage.toast('保存失败');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function cropSquare(file) {
+  if (!file) return file;
+  if (file.type === 'image/gif') return file;
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await loadImage(url);
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+    const size = Math.min(w, h);
+    if (!size) return file;
+    const out = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = out;
+    canvas.height = out;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, (w - size) / 2, (h - size) / 2, size, size, 0, 0, out, out);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
+    if (!blob) return file;
+    return new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
+  } catch (e) {
+    return file;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function uploadAvatar(file) {
+  const btn = document.getElementById('avatarBtn');
+  btn.disabled = true;
+  LovePage.toast('头像上传中…');
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch('/api/auth/profile/avatar', {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin'
+    });
+    const r = await res.json().catch(() => ({ code: res.status, message: '上传失败' }));
+    if (r.code === 401) { location.replace('/login?redirect=' + encodeURIComponent('/profile')); return; }
+    if (r.code === 200 && r.data) {
+      applyUser(r.data);
+      LovePage.toast('头像已更新');
+    } else {
+      LovePage.toast(r.message || '上传失败');
+    }
+  } catch (e) {
+    LovePage.toast('上传失败');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function onAvatarPicked(input) {
+  const file = input && input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) { LovePage.toast('图片请小于 8MB'); return; }
+  const prepared = await cropSquare(file);
+  await uploadAvatar(prepared);
+}
+
+async function savePassword() {
+  const currentPassword = document.getElementById('curPwd').value || '';
+  const newPassword = document.getElementById('newPwd').value || '';
+  const confirmPassword = document.getElementById('confirmPwd').value || '';
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    LovePage.toast('请填写当前密码、新密码和确认密码');
+    return;
+  }
+  if (newPassword !== confirmPassword) { LovePage.toast('两次输入的新密码不一致'); return; }
+  const btn = document.getElementById('pwdBtn');
+  btn.disabled = true;
+  try {
+    const r = await LovePage.api('/api/auth/profile/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword, confirmPassword })
+    });
+    if (r.code === 401) { location.replace('/login?redirect=' + encodeURIComponent('/profile')); return; }
+    if (r.code === 200) {
+      document.getElementById('curPwd').value = '';
+      document.getElementById('newPwd').value = '';
+      document.getElementById('confirmPwd').value = '';
+      LovePage.toast(r.message || '密码已修改');
+    } else {
+      LovePage.toast(r.message || '修改失败');
+    }
+  } catch (e) {
+    if (String(e && e.message) !== 'unauthorized') LovePage.toast('修改失败');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('avatarBtn').addEventListener('click', () => {
+  document.getElementById('avatarFile').click();
+});
+document.getElementById('avatarFile').addEventListener('change', (e) => onAvatarPicked(e.target));
+
+(async function () {
+  const u = await LovePage.ready({ chefOnly: false });
+  if (!u) return;
+  applyUser(u);
+})();
+</script>
+</body>
+</html>

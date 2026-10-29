@@ -17,6 +17,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -29,6 +31,8 @@ public class FileUploadService {
 
     public static final String MINIO_KEY_PREFIX = "minio:";
     private static final int PRESIGN_EXPIRY_SECONDS = 7 * 24 * 60 * 60;
+    private static final Set<String> IMAGE_EXTS = Set.of(
+            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif");
 
     @Autowired(required = false)
     private MinioClient minioClient;
@@ -47,15 +51,26 @@ public class FileUploadService {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("文件不能为空");
         }
-        String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("image/")) {
-            throw new IllegalArgumentException("只支持图片格式");
-        }
-
         String originalFilename = file.getOriginalFilename();
         String extension = "";
         if (originalFilename != null && originalFilename.contains(".")) {
             extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+        }
+        String extLower = extension.toLowerCase(Locale.ROOT);
+        String contentType = file.getContentType();
+        String typeLower = contentType == null ? "" : contentType.toLowerCase(Locale.ROOT);
+        if (extLower.contains("svg") || typeLower.contains("svg")) {
+            throw new IllegalArgumentException("只支持图片格式");
+        }
+        boolean imageType = typeLower.startsWith("image/");
+        if (!imageType) {
+            // 部分 WebView 选图时 content-type 为空或 application/octet-stream，按扩展名放行
+            if (!IMAGE_EXTS.contains(extLower)) {
+                throw new IllegalArgumentException("只支持图片格式");
+            }
+            contentType = contentTypeForExt(extLower);
+        } else if (!IMAGE_EXTS.contains(extLower)) {
+            extension = extForContentType(typeLower);
         }
         String fileName = UUID.randomUUID().toString() + extension;
 
@@ -71,6 +86,28 @@ public class FileUploadService {
             log.info("MinIO not configured, using local upload");
         }
         return uploadToLocal(file, fileName);
+    }
+
+    private static String contentTypeForExt(String ext) {
+        return switch (ext) {
+            case ".png" -> "image/png";
+            case ".gif" -> "image/gif";
+            case ".webp" -> "image/webp";
+            case ".bmp" -> "image/bmp";
+            case ".heic" -> "image/heic";
+            case ".heif" -> "image/heif";
+            default -> "image/jpeg";
+        };
+    }
+
+    private static String extForContentType(String typeLower) {
+        if (typeLower.contains("png")) return ".png";
+        if (typeLower.contains("gif")) return ".gif";
+        if (typeLower.contains("webp")) return ".webp";
+        if (typeLower.contains("bmp")) return ".bmp";
+        if (typeLower.contains("heic")) return ".heic";
+        if (typeLower.contains("heif")) return ".heif";
+        return ".jpg";
     }
 
     private String uploadToMinio(MultipartFile file, String fileName, String contentType) throws Exception {

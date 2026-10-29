@@ -21,6 +21,15 @@
 .loc-item .name-row {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
+.loc-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  object-fit: cover; flex-shrink: 0;
+  background: #fff; border: 1px solid var(--rose-line, #F3D5DC);
+}
+.loc-avatar.fallback {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: var(--rose, #E85A7A);
+}
 .loc-item .name { font-weight: 700; font-size: 15px; }
 .loc-item .tag {
   font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
@@ -192,6 +201,14 @@ function addressBlock(m) {
   </a>`;
 }
 
+function memberAvatar(m) {
+  const url = m && m.avatarUrl ? String(m.avatarUrl) : '';
+  if (url) {
+    return `<img class="loc-avatar" alt="" src="${LovePage.escapeHtml(url)}">`;
+  }
+  const ch = String((m && m.nickname) || '家').trim().charAt(0) || '家';
+  return `<span class="loc-avatar fallback">${LovePage.escapeHtml(ch)}</span>`;
+}
 function renderMembers(members, meta) {
   const box = document.getElementById('locList');
   const fetchMeta = document.getElementById('fetchMeta');
@@ -209,12 +226,13 @@ function renderMembers(members, meta) {
   }
   box.innerHTML = members.map(m => {
     const name = LovePage.escapeHtml(m.nickname || '家人');
+    const avatar = memberAvatar(m);
     const roleLabel = LovePage.escapeHtml(m.roleLabel || '');
     const selfTag = m.self ? '<span class="tag self">我</span>' : '';
     const roleTag = `<span class="tag ${(m.role==='CHEF'||m.role==='ADMIN')?'chef':'orderer'}">${roleLabel}</span>`;
     if (!m.hasLocation) {
       return `<div class="loc-item none">
-        <div class="name-row"><span class="name">${name}</span>${selfTag}${roleTag}</div>
+        <div class="name-row">${avatar}<span class="name">${name}</span>${selfTag}${roleTag}</div>
         <div class="seen">暂无位置</div>
         <div class="dist">—</div>
       </div>`;
@@ -236,7 +254,7 @@ function renderMembers(members, meta) {
     }
     const acc = LovePage.escapeHtml(accRaw + accNote);
     return `<div class="loc-item">
-      <div class="name-row"><span class="name">${name}</span>${selfTag}${roleTag}</div>
+      <div class="name-row">${avatar}<span class="name">${name}</span>${selfTag}${roleTag}</div>
       <div class="seen">${lastSeen}${abs ? `<span class="abs">绝对时间 ${abs}</span>` : ''}</div>
       <div class="dist">距你 ${dist}</div>
       ${addressBlock(m)}
