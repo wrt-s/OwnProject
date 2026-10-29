@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FCE8EE">
+<title>爱心币管理 · Love</title>
+<link rel="stylesheet" href="/css/love.css">
+
+<style>
+
+</style>
+</head>
+<body>
+<div class="app subpage">
+  <header class="sub-header">
+    <button type="button" class="back-btn" onclick="LovePage.back()" aria-label="返回">‹</button>
+    <div class="sub-title" id="coinPageTitle">爱心币</div>
+    
+  </header>
+  <main class="sub-body">
+
+<div class="lp-card" style="text-align:center;background:linear-gradient(135deg,#FFF1F4,#fff)">
+  <div style="font-size:13px;color:var(--muted)" id="balanceLabel">当前余额</div>
+  <div style="font-size:36px;font-weight:800;color:var(--rose);margin:6px 0" id="balanceAmt">—</div>
+  <div style="font-size:12px;color:var(--muted)" id="balanceSub">💖 爱心币</div>
+  <div id="coinChefActions" class="chef-only" style="display:none;gap:8px;margin-top:14px;justify-content:center">
+    <button class="lp-btn sm" type="button" id="btnAddCoin" onclick="showAddModal()">充值 / 发放</button>
+    <button class="lp-btn sm ghost" type="button" id="btnUseCoin" onclick="showUseModal()">调整使用</button>
+  </div>
+  <div id="coinOrdererHint" class="orderer-only" style="display:none;margin-top:12px;font-size:12px;color:var(--muted)">可在下方「任务赚币」完成任务领币；手动充值/发放由做餐方操作</div>
+</div>
+
+<!-- ORDERER：任务赚币 -->
+<div class="lp-card" id="taskEarnSection" style="display:none">
+  <h3>✨ 任务赚币</h3>
+  <p style="font-size:12px;color:var(--muted);margin:0 0 10px">完成指定任务可获得爱心币（含「爱爱」等）</p>
+  <div id="taskList" class="lp-list"><div class="lp-empty"><p>加载中…</p></div></div>
+  <div style="margin-top:12px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:6px">我的领取记录</div>
+    <div id="myClaimList" class="lp-list"><div class="lp-empty"><p>暂无</p></div></div>
+  </div>
+</div>
+
+<!-- CHEF：待确认 + 任务管理（与手动加币分开） -->
+<div class="lp-card" id="taskChefSection" style="display:none">
+  <h3>✅ 任务确认</h3>
+  <div id="pendingClaimList" class="lp-list"><div class="lp-empty"><p>暂无待确认</p></div></div>
+  <h3 style="margin-top:16px">📋 任务管理</h3>
+  <div id="manageTaskList" class="lp-list" style="margin-bottom:10px"></div>
+  <button class="lp-btn sm" type="button" onclick="openTaskEdit()">＋ 新增任务</button>
+</div>
+
+<div class="lp-modal-mask" id="taskEditModal" onclick="if(event.target===this)closeTaskEdit()">
+  <div class="lp-modal" onclick="event.stopPropagation()">
+    <div class="handle"></div>
+    <div class="hd"><span id="taskEditTitle">新增任务</span><button class="x" type="button" onclick="closeTaskEdit()">×</button></div>
+    <input type="hidden" id="taskEditId">
+    <div class="lp-field"><label>名称</label><input id="taskEditName" placeholder="如：爱爱"></div>
+    <div class="lp-field"><label>说明</label><input id="taskEditDesc" placeholder="任务描述"></div>
+    <div class="lp-field"><label>奖励币数</label><input id="taskEditCoins" type="number" min="1" value="10"></div>
+    <div class="lp-field"><label>每日次数（0不限）</label><input id="taskEditLimit" type="number" min="0" value="1"></div>
+    <label class="lp-chip" style="margin-bottom:12px;display:inline-flex;align-items:center">
+      <input type="checkbox" id="taskEditConfirm" style="margin-right:6px"> 需做餐方确认后发币
+    </label>
+    <button class="lp-btn block" type="button" onclick="saveTaskEdit()">保存</button>
+  </div>
+</div>
+
+<div class="lp-card">
+  <h3 id="txListTitle">流水记录</h3>
+  <div id="txList" class="lp-list"><div class="lp-empty"><div class="ico">⏳</div><p>加载中…</p></div></div>
+</div>
+
+<div class="lp-modal-mask" id="addModal" onclick="if(event.target===this)closeAddModal()">
+  <div class="lp-modal" onclick="event.stopPropagation()">
+    <div class="handle"></div>
+    <div class="hd"><span>充值 / 发放</span><button class="x" type="button" onclick="closeAddModal()">×</button></div>
+    <div class="lp-field"><label>类型</label>
+      <select id="addType" onchange="onAddTypeChange()">
+        <option value="RECHARGE">充值</option>
+        <option value="REWARD">奖励发放</option>
+        <option value="ADJUST">调整</option>
+      </select>
+    </div>
+    <div class="lp-field"><label>数量</label><input id="addAmount" type="number" min="1" placeholder="爱心币数量"></div>
+    <div class="lp-field"><label>备注</label><input id="addRemark" type="text" placeholder="可选"></div>
+    <button class="lp-btn block" type="button" onclick="confirmAdd()">确认</button>
+  </div>
+</div>
+<div class="lp-modal-mask" id="useModal" onclick="if(event.target===this)closeUseModal()">
+  <div class="lp-modal" onclick="event.stopPropagation()">
+    <div class="handle"></div>
+    <div class="hd"><span>使用爱心币</span><button class="x" type="button" onclick="closeUseModal()">×</button></div>
+    <div class="lp-field"><label>类型</label>
+      <select id="useType">
+        <option value="CONSUME">消费</option>
+        <option value="GIFT">赠送</option>
+        <option value="OTHER">其他</option>
+      </select>
+    </div>
+    <div class="lp-field"><label>数量</label><input id="useAmount" type="number" min="1" placeholder="爱心币数量"></div>
+    <div class="lp-field"><label>备注</label><input id="useRemark" type="text" placeholder="可选"></div>
+    <button class="lp-btn block" type="button" onclick="confirmUse()">确认使用</button>
+  </div>
+</div>
+
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/love-page.js"></script>
+
+<script>
+
+let userId = null;
+/** 爱心币目标用户：ORDERER=自己；CHEF=家庭点单方 */
+let coinTargetUserId = null;
+let coinTargetNickname = '';
+(async function () {
+  const u = await LovePage.ready({ chefOnly: false });
+  if (!u) return;
+  userId = LovePage.getUserId();
+  if (typeof window.__afterAuth === 'function') await window.__afterAuth();
+})();
+
+async function resolveCoinTarget() {
+  if (!LovePage.isChef()) {
+    coinTargetUserId = LovePage.getUserId();
+    coinTargetNickname = (LovePage.getCurrentUser() && LovePage.getCurrentUser().nickname) || '';
+    return coinTargetUserId;
+  }
+  const oid = await LovePage.resolveOrdererUserId();
+  if (oid) {
+    coinTargetUserId = oid;
+    try {
+      const r = await LovePage.api('/api/online/partner');
+      coinTargetNickname = (r && r.data && r.data.nickname) || '点单方';
+    } catch (e) { coinTargetNickname = '点单方'; }
+  } else {
+    coinTargetUserId = LovePage.getUserId();
+    coinTargetNickname = '';
+    LovePage.toast('未找到点单方，暂显示自己的余额');
+  }
+  return coinTargetUserId;
+}
+
+
+function onAddTypeChange() {
+  const t = document.getElementById('addType').value;
+  const hint = { RECHARGE:'给对方或自己充值爱心币', REWARD:'奖励发放', ADJUST:'余额调整（可正可负请谨慎）' }[t] || '';
+  const el = document.getElementById('addRemark');
+  if (el && hint && !el.value) el.placeholder = hint;
+}
+function showAddModal(){ document.getElementById('addModal').classList.add('show'); }
+function closeAddModal(){ document.getElementById('addModal').classList.remove('show'); }
+function showUseModal(){ document.getElementById('useModal').classList.add('show'); }
+function closeUseModal(){ document.getElementById('useModal').classList.remove('show'); }
+function getTypeText(t) {
+  const map = {
+    RECHARGE:'充值', REWARD:'奖励', ADJUST:'调整', CONSUME:'消费', GIFT:'赠送', ORDER:'点单',
+    CHECKIN:'签到', LOTTERY:'抽奖', BETTING:'押注', OTHER:'其他', ADD:'增加', USE:'使用',
+    use_lottery:'抽奖消费', add_lottery:'抽奖奖励', 'add_抽奖':'抽奖奖励',
+    use_order:'点单消费', refund_order:'点单退款', use_task:'任务消费',
+    use_betting:'押注消费', add_betting:'押注变动', add_betting_win:'押注获胜',
+    use_blind_box:'盲盒消费', add_achievement:'成就奖励', add_signin:'签到奖励',
+    'add_签到':'签到奖励', 'add_奖励':'奖励', add_REWARD:'奖励',
+    add_checkin:'签到奖励', consume:'消费', recharge:'充值', task_:'任务奖励'
+  };
+  if (map[t]) return map[t];
+  const s = String(t||'');
+  if (s.startsWith('add_')) return '收入 · ' + (map[s] || s.slice(4));
+  if (s.startsWith('use_')) return '支出 · ' + (map[s] || s.slice(4));
+  if (s.startsWith('refund_')) return '退款 · ' + s.slice(7);
+  return s || '变动';
+}
+async function loadBalance() {
+  try {
+    const tid = coinTargetUserId || userId;
+    const r = await LovePage.api('/api/coin/balance/' + tid);
+    if (r.code === 200) {
+      const bal = (typeof r.data === 'number') ? r.data : (r.data?.balance ?? r.data?.amount ?? 0);
+      document.getElementById('balanceAmt').textContent = bal;
+    }
+  } catch (e) {}
+}
+async function loadTransactions() {
+  const box = document.getElementById('txList');
+  try {
+    const tid = coinTargetUserId || userId;
+    const r = await LovePage.api('/api/coin/transactions/' + tid);
+    const list = (r.code === 200 && (r.data?.list || r.data)) || [];
+    const arr = Array.isArray(list) ? list : [];
+    if (!arr.length) {
+      box.innerHTML = '<div class="lp-empty"><div class="ico">📭</div><p>暂无流水</p></div>';
+      return;
+    }
+    box.innerHTML = arr.slice(0, 50).map(tx => {
+      const amt = Number(tx.amount ?? tx.change ?? 0);
+      const sign = amt >= 0 ? '+' : '';
+      const color = amt >= 0 ? 'var(--ok)' : 'var(--danger)';
+      const type = getTypeText(tx.type || tx.transactionType || tx.bizType);
+      const time = (tx.createdAt || tx.createTime || tx.time || '').toString().slice(0, 19).replace('T', ' ');
+      const remark = tx.remark || tx.description || '';
+      return `<div class="lp-item"><div class="row"><span class="title">${LovePage.escapeHtml(type)}</span><span style="font-weight:800;color:${color}">${sign}${amt}</span></div><div class="meta">${LovePage.escapeHtml(time)}${remark ? ' · ' + LovePage.escapeHtml(remark) : ''}</div></div>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>';
+  }
+}
+async function confirmAdd() {
+  if (!LovePage.isChef()) { LovePage.toast('仅做餐方可发放爱心币'); return; }
+  const amount = Number(document.getElementById('addAmount').value);
+  const type = document.getElementById('addType').value;
+  const remark = document.getElementById('addRemark').value.trim();
+  if (!amount || amount <= 0) { LovePage.toast('请输入数量'); return; }
+  try {
+    const r = await LovePage.api('/api/coin/add', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: coinTargetUserId || userId, amount, type, description: remark || type, remark })
+    });
+    if (r.code === 200) { LovePage.toast('操作成功'); closeAddModal(); loadBalance(); loadTransactions(); }
+    else LovePage.toast(r.message || '失败');
+  } catch (e) { LovePage.toast('网络错误'); }
+}
+async function confirmUse() {
+  const amount = Number(document.getElementById('useAmount').value);
+  const type = document.getElementById('useType').value;
+  const remark = document.getElementById('useRemark').value.trim();
+  if (!amount || amount <= 0) { LovePage.toast('请输入数量'); return; }
+  try {
+    const r = await LovePage.api('/api/coin/use', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: coinTargetUserId || userId, amount, type, description: remark || type, remark })
+    });
+    if (r.code === 200) { LovePage.toast('使用成功'); closeUseModal(); loadBalance(); loadTransactions(); }
+    else LovePage.toast(r.message || '失败');
+  } catch (e) { LovePage.toast('网络错误'); }
+}
+window.__afterAuth = async () => {
+  const isChef = LovePage.isChef();
+  const title = document.getElementById('coinPageTitle');
+  if (title) title.textContent = isChef ? '爱心币管理' : '我的爱心币';
+  const chefActions = document.getElementById('coinChefActions');
+  const ordererHint = document.getElementById('coinOrdererHint');
+  if (chefActions) chefActions.style.display = isChef ? 'flex' : 'none';
+  if (ordererHint) ordererHint.style.display = isChef ? 'none' : 'block';
+  const taskEarn = document.getElementById('taskEarnSection');
+  const taskChef = document.getElementById('taskChefSection');
+  if (taskEarn) taskEarn.style.display = isChef ? 'none' : 'block';
+  if (taskChef) taskChef.style.display = isChef ? 'block' : 'none';
+  if (!isChef) {
+    closeAddModal();
+    closeUseModal();
+  }
+  await resolveCoinTarget();
+  const balLabel = document.getElementById('balanceLabel');
+  const balSub = document.getElementById('balanceSub');
+  const txTitle = document.getElementById('txListTitle');
+  if (isChef) {
+    if (balLabel) balLabel.textContent = (coinTargetNickname ? (coinTargetNickname + '的余额') : '点单方余额');
+    if (balSub) balSub.textContent = '💖 点单方爱心币';
+    if (txTitle) txTitle.textContent = '点单方流水';
+  } else {
+    if (balLabel) balLabel.textContent = '当前余额';
+    if (balSub) balSub.textContent = '💖 爱心币';
+    if (txTitle) txTitle.textContent = '流水记录';
+  }
+  await loadBalance();
+  await loadTransactions();
+  if (isChef) {
+    await loadPendingClaims();
+    await loadManageTasks();
+  } else {
+    await loadRewardTasks();
+    await loadMyClaims();
+  }
+};
+
+// ORDERER 禁止打开加币弹窗
+const _showAdd = typeof showAddModal === 'function' ? showAddModal : null;
+showAddModal = function () {
+  if (!LovePage.isChef()) { LovePage.toast('仅做餐方可充值/发放'); return; }
+  document.getElementById('addModal').classList.add('show');
+};
+showUseModal = function () {
+  if (!LovePage.isChef()) { LovePage.toast('仅做餐方可操作'); return; }
+  document.getElementById('useModal').classList.add('show');
+};
+
+
+/* ---- 任务赚币 ---- */
+function claimStatusText(st) {
+  return ({ pending:'待确认', approved:'已到账', rejected:'已拒绝', completed:'已到账' })[st] || st || '';
+}
+async function loadRewardTasks() {
+  const box = document.getElementById('taskList');
+  if (!box) return;
+  try {
+    const r = await LovePage.api('/api/reward-task/list');
+    const list = (r.code === 200 && (r.data?.list || r.data)) || [];
+    const arr = Array.isArray(list) ? list : [];
+    if (!arr.length) { box.innerHTML = '<div class="lp-empty"><p>暂无任务</p></div>'; return; }
+    box.innerHTML = arr.map(t => {
+      const can = !!t.canClaim;
+      const conf = t.requireConfirm ? ' · 需确认' : ' · 立即到账';
+      const prog = t.dailyLimit > 0 ? ('今日 ' + (t.todayCompleted||0) + '/' + t.dailyLimit) : '不限次数';
+      return '<div class="lp-item"><div class="row"><span class="title">'+LovePage.escapeHtml(t.name||'')+'</span><span style="font-weight:800;color:var(--rose)">+'+ (t.coinReward||0) +'</span></div><div class="meta">'+LovePage.escapeHtml(t.description||'')+conf+' · '+prog+'</div>'+(can?'<button class="lp-btn sm" style="margin-top:8px" type="button" onclick="claimTask('+t.id+')">完成领取</button>':'<div class="meta" style="margin-top:6px;color:var(--muted)">今日已达上限</div>')+'</div>';
+    }).join('');
+  } catch (e) { box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>'; }
+}
+async function claimTask(taskId) {
+  if (!confirm('确认已完成该任务？')) return;
+  try {
+    const r = await LovePage.api('/api/reward-task/claim', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId })
+    });
+    if (r.code === 200) {
+      LovePage.toast(r.message || '成功');
+      await loadBalance(); await loadTransactions(); await loadRewardTasks(); await loadMyClaims();
+    } else LovePage.toast(r.message || '失败');
+  } catch (e) { LovePage.toast('网络错误'); }
+}
+async function loadMyClaims() {
+  const box = document.getElementById('myClaimList');
+  if (!box) return;
+  try {
+    const r = await LovePage.api('/api/reward-task/my-claims');
+    const list = (r.code === 200 && (r.data?.list || r.data)) || [];
+    const arr = Array.isArray(list) ? list : [];
+    if (!arr.length) { box.innerHTML = '<div class="lp-empty"><p>暂无记录</p></div>'; return; }
+    box.innerHTML = arr.slice(0, 20).map(c => {
+      const time = (c.createdAt || '').toString().slice(0, 19).replace('T', ' ');
+      return '<div class="lp-item"><div class="row"><span class="title">'+LovePage.escapeHtml(c.taskName||('任务#'+c.taskId))+'</span><span class="meta">'+claimStatusText(c.status)+(c.coinsAwarded?(' · +'+c.coinsAwarded):'')+'</span></div><div class="meta">'+LovePage.escapeHtml(time)+'</div></div>';
+    }).join('');
+  } catch (e) { box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>'; }
+}
+async function loadPendingClaims() {
+  const box = document.getElementById('pendingClaimList');
+  if (!box) return;
+  try {
+    const r = await LovePage.api('/api/reward-task/pending');
+    const list = (r.code === 200 && (r.data?.list || r.data)) || [];
+    const arr = Array.isArray(list) ? list : [];
+    if (!arr.length) { box.innerHTML = '<div class="lp-empty"><p>暂无待确认</p></div>'; return; }
+    box.innerHTML = arr.map(c => {
+      const time = (c.createdAt || '').toString().slice(0, 19).replace('T', ' ');
+      return '<div class="lp-item"><div class="row"><span class="title">'+LovePage.escapeHtml((c.userNickname||'')+' · '+(c.taskName||''))+'</span></div><div class="meta">'+LovePage.escapeHtml(time)+'</div><div style="display:flex;gap:8px;margin-top:8px"><button class="lp-btn sm" type="button" onclick="confirmClaim('+c.id+',true)">通过发币</button><button class="lp-btn sm ghost" type="button" onclick="confirmClaim('+c.id+',false)">拒绝</button></div></div>';
+    }).join('');
+  } catch (e) { box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>'; }
+}
+async function confirmClaim(claimId, approve) {
+  try {
+    const r = await LovePage.api('/api/reward-task/confirm', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ claimId, approve })
+    });
+    if (r.code === 200) { LovePage.toast(r.message || '已处理'); await loadPendingClaims(); }
+    else LovePage.toast(r.message || '失败');
+  } catch (e) { LovePage.toast('网络错误'); }
+}
+async function loadManageTasks() {
+  const box = document.getElementById('manageTaskList');
+  if (!box) return;
+  try {
+    const r = await LovePage.api('/api/reward-task/manage/list');
+    const list = (r.code === 200 && (r.data?.list || r.data)) || [];
+    const arr = Array.isArray(list) ? list : [];
+    if (!arr.length) { box.innerHTML = '<div class="lp-empty"><p>暂无任务</p></div>'; return; }
+    box.innerHTML = arr.map(t => {
+      const on = t.enabled === 1 || t.enabled === true;
+      return '<div class="lp-item"><div class="row"><span class="title">'+LovePage.escapeHtml(t.name||'')+'</span><span style="font-weight:800;color:var(--rose)">+'+ (t.coinReward||0) +'</span></div><div class="meta">'+(on?'启用':'停用')+(t.requireConfirm==1?' · 需确认':' · 即时')+' · 每日'+(t.dailyLimit??1)+'次</div><div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="lp-btn sm ghost" type="button" data-task="'+encodeURIComponent(JSON.stringify({id:t.id,name:t.name,description:t.description||'',coinReward:t.coinReward,dailyLimit:t.dailyLimit,requireConfirm:t.requireConfirm}))+'" onclick="editTaskFromBtn(this)">编辑</button><button class="lp-btn sm" type="button" onclick="toggleTask('+t.id+','+(!on)+')">'+(on?'停用':'启用')+'</button></div></div>';
+    }).join('');
+  } catch (e) { box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>'; }
+}
+function openTaskEdit(t) {
+  document.getElementById('taskEditId').value = t && t.id ? t.id : '';
+  document.getElementById('taskEditName').value = t && t.name ? t.name : '';
+  document.getElementById('taskEditDesc').value = t && t.description ? t.description : '';
+  document.getElementById('taskEditCoins').value = t && t.coinReward != null ? t.coinReward : 10;
+  document.getElementById('taskEditLimit').value = t && t.dailyLimit != null ? t.dailyLimit : 1;
+  document.getElementById('taskEditConfirm').checked = !!(t && (t.requireConfirm === 1 || t.requireConfirm === true));
+  document.getElementById('taskEditTitle').textContent = t && t.id ? '编辑任务' : '新增任务';
+  document.getElementById('taskEditModal').classList.add('show');
+}
+function closeTaskEdit(){ document.getElementById('taskEditModal').classList.remove('show'); }
+async function saveTaskEdit() {
+  const id = document.getElementById('taskEditId').value;
+  const body = {
+    name: document.getElementById('taskEditName').value.trim(),
+    description: document.getElementById('taskEditDesc').value.trim(),
+    coinReward: Number(document.getElementById('taskEditCoins').value),
+    dailyLimit: Number(document.getElementById('taskEditLimit').value),
+    requireConfirm: document.getElementById('taskEditConfirm').checked ? 1 : 0,
+    enabled: 1
+  };
+  if (id) body.id = Number(id);
+  if (!body.name) { LovePage.toast('请填写名称'); return; }
+  try {
+    const r = await LovePage.api('/api/reward-task/save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (r.code === 200) { LovePage.toast('已保存'); closeTaskEdit(); loadManageTasks(); }
+    else LovePage.toast(r.message || '失败');
+  } catch (e) { LovePage.toast('网络错误'); }
+}
+async function toggleTask(taskId, enabled) {
+  try {
+    const r = await LovePage.api('/api/reward-task/toggle', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, enabled })
+    });
+    if (r.code === 200) { LovePage.toast(r.message || 'ok'); loadManageTasks(); }
+    else LovePage.toast(r.message || '失败');
+  } catch (e) { LovePage.toast('网络错误'); }
+}
+
+function editTaskFromBtn(btn) {
+  try {
+    const raw = btn.getAttribute('data-task') || '{}';
+    openTaskEdit(JSON.parse(decodeURIComponent(raw)));
+  } catch (e) { LovePage.toast('无法编辑'); }
+}
+
+</script>
+</body>
+</html>

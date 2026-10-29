@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FCE8EE">
+<title>幸运币押注 · Love</title>
+<link rel="stylesheet" href="/css/love.css">
+
+<style>
+
+</style>
+</head>
+<body>
+<div class="app subpage">
+  <header class="sub-header">
+    <button type="button" class="back-btn" onclick="LovePage.back()" aria-label="返回">‹</button>
+    <div class="sub-title">幸运币押注</div>
+    
+  </header>
+  <main class="sub-body">
+
+<div class="lp-hero"><div class="emoji">🎲</div><div class="desc">小赌怡情 · 猜大小</div></div>
+<div class="lp-stats">
+  <div class="lp-stat"><div class="ico">💖</div><div class="val" id="balance">—</div><div class="lbl">余额</div></div>
+  <div class="lp-stat"><div class="ico">🏆</div><div class="val" id="winCount">0</div><div class="lbl">胜场</div></div>
+  <div class="lp-stat"><div class="ico">📉</div><div class="val" id="loseCount">0</div><div class="lbl">负场</div></div>
+</div>
+<div class="lp-card">
+  <h3>选择押注</h3>
+  <div class="lp-chips" id="betTypes">
+    <button class="lp-chip" type="button" data-bet="big" onclick="selectBetType('big')">大 (4-6)</button>
+    <button class="lp-chip" type="button" data-bet="small" onclick="selectBetType('small')">小 (1-3)</button>
+    <button class="lp-chip" type="button" data-bet="odd" onclick="selectBetType('odd')">单</button>
+    <button class="lp-chip" type="button" data-bet="even" onclick="selectBetType('even')">双</button>
+  </div>
+  <div class="lp-field"><label>押注金额</label><input id="betAmount" type="number" min="1" value="10" oninput="updateBetHint()"></div>
+  <div id="betHint" style="font-size:12px;color:var(--muted);margin-bottom:12px">选择方向并输入金额</div>
+  <button class="lp-btn block" id="betBtn" type="button" onclick="placeBet()">确认押注</button>
+  <div id="diceAnim" style="text-align:center;font-size:48px;margin-top:12px;display:none">🎲</div>
+</div>
+<div class="lp-card">
+  <h3>押注记录</h3>
+  <div id="historyList" class="lp-list"><div class="lp-empty"><div class="ico">⏳</div><p>加载中…</p></div></div>
+</div>
+
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/love-page.js"></script>
+
+<script>
+
+let userId = null;
+(async function () {
+  const u = await LovePage.ready({ chefOnly: false });
+  if (!u) return;
+  userId = LovePage.getUserId();
+  if (typeof window.__afterAuth === 'function') await window.__afterAuth();
+})();
+
+
+let selectedBet = null;
+function selectBetType(t) {
+  selectedBet = t;
+  document.querySelectorAll('#betTypes .lp-chip').forEach(c => c.classList.toggle('active', c.dataset.bet === t));
+  updateBetHint();
+}
+function updateBetHint() {
+  const amt = Number(document.getElementById('betAmount').value) || 0;
+  const map = { big:'大', small:'小', odd:'单', even:'双' };
+  document.getElementById('betHint').textContent = selectedBet
+    ? `押 ${map[selectedBet]} · ${amt} 爱心币 · 赢则约 +${amt}`
+    : '选择方向并输入金额';
+}
+async function loadBalance() {
+  try {
+    const r = await LovePage.api(`/api/coin/balance/${userId}`);
+    if (r.code === 200) {
+      const bal = (typeof r.data === 'number') ? r.data : (r.data?.balance ?? 0);
+      document.getElementById('balance').textContent = bal;
+    }
+  } catch(e){}
+}
+async function loadStats() {
+  try {
+    const r = await LovePage.api(`/api/betting/stats/${userId}`);
+    if (r.code === 200 && r.data) {
+      document.getElementById('winCount').textContent = r.data.winCount ?? r.data.wins ?? 0;
+      document.getElementById('loseCount').textContent = r.data.loseCount ?? r.data.losses ?? 0;
+    }
+  } catch(e){}
+}
+function betTypeLabel(v) {
+  return ({ big:'大', small:'小', odd:'单', even:'双', BIG:'大', SMALL:'小', ODD:'单', EVEN:'双' })[v] || v || '-';
+}
+async function loadHistory() {
+  const box = document.getElementById('historyList');
+  try {
+    const r = await LovePage.api(`/api/betting/history/${userId}`);
+    const list = (r.code === 200 && (r.data?.list || r.data)) || [];
+    const arr = Array.isArray(list) ? list : [];
+    if (!arr.length) { box.innerHTML = '<div class="lp-empty"><div class="ico">📝</div><p>暂无记录</p></div>'; return; }
+    box.innerHTML = arr.slice(0,30).map(h => {
+      const win = h.win || h.isWin || h.result === 'WIN';
+      const amt = h.amount ?? h.betAmount ?? 0;
+      const payout = h.payout ?? h.winAmount ?? 0;
+      const time = (h.createTime || h.createdAt || '').toString().slice(0,16).replace('T',' ');
+      return `<div class="lp-item"><div class="row"><span class="title">${win?'赢':'输'} · ${LovePage.escapeHtml(betTypeLabel(h.betType||h.type||''))}</span><span style="font-weight:800;color:${win?'var(--ok)':'var(--danger)'}">${win?'+':'-'}${win?payout:amt}</span></div><div class="meta">${LovePage.escapeHtml(time)} · 点数 ${h.dice??h.point??'-'}</div></div>`;
+    }).join('');
+  } catch(e){ box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>'; }
+}
+async function placeBet() {
+  if (!selectedBet) { LovePage.toast('请选择押注方向'); return; }
+  const amount = Number(document.getElementById('betAmount').value);
+  if (!amount || amount <= 0) { LovePage.toast('请输入金额'); return; }
+  const btn = document.getElementById('betBtn');
+  btn.disabled = true;
+  const dice = document.getElementById('diceAnim');
+  dice.style.display = 'block';
+  dice.textContent = '🎲';
+  try {
+    const r = await LovePage.api('/api/betting/place', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ userId, betType: selectedBet, amount, betAmount: amount })
+    });
+    if (r.code === 200 || r.success) {
+      const d = r.data || r;
+      const point = d.dice ?? d.point ?? d.resultPoint;
+      dice.textContent = '🎲 ' + (point != null ? point : '');
+      const win = d.win || d.isWin || d.result === 'WIN';
+      LovePage.toast(win ? `赢了！+${d.payout ?? d.winAmount ?? amount}` : `没中，点数 ${point ?? '-'}`);
+      await loadBalance(); await loadStats(); await loadHistory();
+    } else LovePage.toast(r.message || '押注失败');
+  } catch(e){ LovePage.toast('网络错误'); }
+  finally { btn.disabled = false; setTimeout(()=> dice.style.display='none', 1800); }
+}
+window.__afterAuth = async () => { await loadBalance(); await loadStats(); await loadHistory(); };
+
+</script>
+</body>
+</html>

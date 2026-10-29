@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FCE8EE">
+<title>和小布聊聊 · Love</title>
+<link rel="stylesheet" href="/css/love.css">
+<style>
+.xb-wrap { display:flex; flex-direction:column; height:calc(100vh - 56px); max-height:calc(100dvh - 56px); }
+.xb-hero { padding:12px 4px 8px; text-align:center; }
+.xb-hero .emoji { font-size:36px; }
+.xb-hero .desc { font-size:13px; color:var(--muted); margin-top:4px; }
+.xb-msgs {
+  flex:1; overflow-y:auto; padding:8px 2px 12px;
+  display:flex; flex-direction:column; gap:10px;
+  -webkit-overflow-scrolling:touch;
+}
+.xb-row { display:flex; gap:8px; align-items:flex-end; max-width:92%; }
+.xb-row.me { align-self:flex-end; flex-direction:row-reverse; }
+.xb-row.bot { align-self:flex-start; }
+.xb-av {
+  width:32px; height:32px; border-radius:50%;
+  background:linear-gradient(135deg,#FFF7F9,#FFE8EF);
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px; flex-shrink:0; border:1px solid var(--rose-line,#F3D5DC);
+}
+.xb-bubble {
+  padding:10px 12px; border-radius:16px; font-size:14px; line-height:1.45;
+  word-break:break-word; white-space:pre-wrap;
+}
+.xb-row.bot .xb-bubble {
+  background:#fff; border:1px solid var(--rose-line,#F3D5DC);
+  border-bottom-left-radius:6px; color:var(--text);
+}
+.xb-row.me .xb-bubble {
+  background:linear-gradient(135deg,#FF8FA3,#E85A7A);
+  color:#fff; border-bottom-right-radius:6px;
+}
+.xb-meta { font-size:10px; color:var(--muted); margin:0 40px 2px; }
+.xb-meta.me { text-align:right; }
+.xb-composer {
+  display:flex; gap:8px; align-items:flex-end;
+  padding:10px 0 calc(10px + env(safe-area-inset-bottom));
+  border-top:1px solid var(--rose-line,#F3D5DC); background:var(--bg,#FCE8EE);
+}
+.xb-composer textarea {
+  flex:1; min-height:40px; max-height:100px; resize:none;
+  border-radius:14px; border:1px solid var(--rose-line,#F3D5DC);
+  padding:10px 12px; font-size:14px; font-family:inherit; background:#fff;
+}
+.xb-composer button.send {
+  height:40px; padding:0 16px; border:none; border-radius:14px;
+  background:var(--rose,#E85A7A); color:#fff; font-weight:700; font-size:14px;
+}
+.xb-composer button.send:disabled { opacity:.5; }
+.xb-actions { display:flex; gap:8px; justify-content:center; margin-bottom:6px; flex-wrap:wrap; }
+.xb-actions button {
+  border:1px solid var(--rose-line,#F3D5DC); background:#fff; border-radius:999px;
+  padding:4px 10px; font-size:12px; color:var(--text-2);
+}
+.xb-typing { font-size:12px; color:var(--muted); padding-left:40px; }
+</style>
+</head>
+<body>
+<div class="app subpage">
+  <header class="sub-header">
+    <button type="button" class="back-btn" onclick="LovePage.back()" aria-label="返回">←</button>
+    <div class="sub-title">小布</div>
+    <button type="button" class="lp-btn sm ghost" style="margin-right:8px" onclick="resetChat()">新对话</button>
+  </header>
+  <main class="sub-body xb-wrap">
+    <div class="xb-hero">
+      <div class="emoji">🐰</div>
+      <div class="desc">我是小布，在这个小家里扮演餐方布布，陪一二宝～ 爱心币、点餐、心情、纪念日都懂一点点</div>
+    </div>
+    <div class="xb-actions">
+      <button type="button" onclick="quick('今天吃什么好？')">今天吃什么</button>
+      <button type="button" onclick="quick('陪我聊聊天呗')">聊聊天</button>
+      <button type="button" onclick="quick('记一下备忘：')">记备忘</button>
+    </div>
+    <div class="xb-msgs" id="xbMsgs"></div>
+    <div class="xb-typing" id="xbTyping" hidden>小布正在想…</div>
+    <div class="xb-composer">
+      <textarea id="xbInput" rows="1" maxlength="500" placeholder="跟小布说点什么…"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+      <button class="send" type="button" id="xbSend" onclick="sendChat()">发送</button>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/love-page.js"></script>
+<script>
+const LS_KEY = 'love_xiaobu_history_v1';
+const CART_KEY = 'love_cart';
+let chatHistory = [];
+
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    chatHistory = Array.isArray(arr) ? arr.filter(x => x && (x.role==='user'||x.role==='assistant') && x.content).slice(-12) : [];
+  } catch (e) { chatHistory = []; }
+}
+function saveLocal() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(chatHistory.slice(-12))); } catch (e) {}
+}
+function appendBubble(role, text) {
+  const box = document.getElementById('xbMsgs');
+  const row = document.createElement('div');
+  row.className = 'xb-row ' + (role === 'user' ? 'me' : 'bot');
+  if (role === 'assistant') {
+    row.innerHTML = '<div class="xb-av">🐰</div><div class="xb-bubble"></div>';
+  } else {
+    row.innerHTML = '<div class="xb-bubble"></div>';
+  }
+  row.querySelector('.xb-bubble').textContent = text;
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+function renderAll() {
+  const box = document.getElementById('xbMsgs');
+  box.innerHTML = '';
+  if (!chatHistory.length) {
+    appendBubble('assistant', '嗨～一二宝，我是小布呀。爱心币、点餐、心情、纪念日我都懂一点点。喜欢点单的话跟我说菜名，想加购物车要等我对上菜单才会真加哦～');
+    return;
+  }
+  chatHistory.forEach(h => appendBubble(h.role === 'user' ? 'user' : 'assistant', h.content));
+}
+function quick(t) {
+  document.getElementById('xbInput').value = t;
+  sendChat();
+}
+async function resetChat() {
+  chatHistory = [];
+  saveLocal();
+  try { await LovePage.api('/api/ai/chat/reset', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' }); } catch(e) {}
+  renderAll();
+  LovePage.toast('已开启新对话');
+}
+function readCart() {
+  try {
+    const cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
+    return Array.isArray(cart) ? cart : [];
+  } catch (e) { return []; }
+}
+async function writeCart(nextCart) {
+  const normalized = (Array.isArray(nextCart) ? nextCart : []).map(it => {
+    const id = Number(it && (it.dishId != null ? it.dishId : it.id));
+    if (!Number.isFinite(id) || id <= 0) return null;
+    const qty = Math.max(1, Math.min(99, Number(it.quantity != null ? it.quantity : it.qty) || 1));
+    const priceNum = Number(it.price);
+    return {
+      dishId: id,
+      dishName: String(it.dishName || it.name || ('#' + id)),
+      price: Number.isFinite(priceNum) ? priceNum : (it.price != null ? it.price : 0),
+      priceType: it.priceType || '爱心币',
+      quantity: qty,
+      remark: it.remark || ''
+    };
+  }).filter(Boolean);
+  try {
+    localStorage.setItem(CART_KEY, JSON.stringify(normalized));
+    localStorage.setItem('love_cart_updated_at', String(Date.now()));
+  } catch (e) {
+    LovePage.toast('购物车写入失败（存储受限）');
+    throw e;
+  }
+  let syncOk = false;
+  try {
+    const res = await fetch('/api/cart/sync', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: normalized })
+    });
+    const j = await res.json().catch(function(){ return {}; });
+    syncOk = !!(j && j.code === 200);
+  } catch (e2) { syncOk = false; }
+  return { items: normalized, syncOk: syncOk };
+}
+function correctLastAssistantBubble(text) {
+  const box = document.getElementById('xbMsgs');
+  if (box) {
+    const rows = box.querySelectorAll('.xb-row.bot .xb-bubble');
+    if (rows.length) rows[rows.length - 1].textContent = text;
+  }
+  if (chatHistory.length && chatHistory[chatHistory.length - 1].role === 'assistant') {
+    chatHistory[chatHistory.length - 1].content = text;
+    saveLocal();
+  }
+}
+async function applyAction(data) {
+  if (!data || !data.action || data.action === 'chat') return true;
+  const a = data.action;
+  if (a === 'list_dishes' || a === 'recommend_from_menu') {
+    const suggested = Array.isArray(data.suggested) ? data.suggested : [];
+    const dishes = Array.isArray(data.dishes) ? data.dishes : [];
+    if (!dishes.length) {
+      LovePage.toast('菜单还是空的');
+    } else if (suggested.length) {
+      LovePage.toast('已按现有菜品推荐');
+    } else {
+      LovePage.toast('已读取菜单 ' + dishes.length + ' 道');
+    }
+    return true;
+  } else if (a === 'clear_cart') {
+    await writeCart([]);
+    try { await fetch('/api/cart/clear', { method:'POST', credentials:'same-origin' }); } catch (e) {}
+    LovePage.toast('购物车已清空');
+    return true;
+  } else if (a === 'search_dishes' && data.keyword) {
+    LovePage.toast('可回首页搜索：' + data.keyword);
+    return true;
+  } else if (a === 'add_dishes') {
+    // 后端未确认 session 写入时，绝不报成功
+    if (!data.cartSynced || !Array.isArray(data.added) || !data.added.length) {
+      LovePage.toast('未能加入购物车');
+      return false;
+    }
+    try {
+      let cart = readCart();
+      let addedCount = 0;
+      data.added.forEach(it => {
+        if (!it || typeof it !== 'object') return;
+        const id = Number(it.dishId != null ? it.dishId : it.id);
+        if (!Number.isFinite(id) || id <= 0) return;
+        const qty = Math.max(1, Math.min(99, Number(it.quantity != null ? it.quantity : it.qty) || 1));
+        const idx = cart.findIndex(x => Number(x.dishId != null ? x.dishId : x.id) === id);
+        if (idx >= 0) {
+          cart[idx].quantity = (Number(cart[idx].quantity)||1) + qty;
+          cart[idx].dishName = it.dishName || it.name || cart[idx].dishName || cart[idx].name || ('#' + id);
+          if (it.price != null) cart[idx].price = it.price;
+          if (it.priceType) cart[idx].priceType = it.priceType;
+        } else {
+          cart.push({
+            dishId: id,
+            dishName: it.dishName || it.name || ('#' + id),
+            price: it.price,
+            priceType: it.priceType || '爱心币',
+            quantity: qty,
+            remark: ''
+          });
+        }
+        addedCount++;
+      });
+      if (!addedCount) {
+        LovePage.toast('未能加入购物车（菜品 id 无效）');
+        return false;
+      }
+      const payload = (Array.isArray(data.serverCart) && data.serverCart.length) ? data.serverCart : cart;
+      const written = await writeCart(payload);
+      const verify = readCart();
+      const durable = verify.length > 0 && (written && (written.syncOk || data.cartSynced));
+      if (!durable) {
+        LovePage.toast('购物车未写入成功');
+        return false;
+      }
+      LovePage.toast('已加入购物车（' + addedCount + '）·共' + verify.length + '种');
+      return true;
+    } catch (e) {
+      LovePage.toast('写入购物车失败');
+      return false;
+    }
+  } else if (a === 'create_note') {
+    LovePage.toast('已写入记事本');
+  } else if (a === 'query_coins') {
+    LovePage.toast(data.balance != null ? ('爱心币：' + data.balance) : '已查询爱心币');
+  } else if (a === 'save_mood') {
+    LovePage.toast('心情已记录');
+    try { sessionStorage.setItem('love_mood_need_refresh', '1'); } catch (e) {}
+    // 通知首页 twin 刷新；本页无 twin 时仅打标，返回首页 pageshow 会拉 /api/mood/today
+    try {
+      if (typeof loadPartnerMoodToday === 'function') loadPartnerMoodToday();
+      else {
+        LovePage.api('/api/mood/today').catch(function(){});
+        try { localStorage.setItem('love_mood_refresh_at', String(Date.now())); } catch (e2) {}
+      }
+    } catch (e) {}
+  } else if (a === 'anni_countdown') {
+    if (data.daysLeft != null) LovePage.toast((data.name || '纪念日') + ' 还有 ' + data.daysLeft + ' 天');
+  }
+}
+async function sendChat() {
+  const input = document.getElementById('xbInput');
+  const btn = document.getElementById('xbSend');
+  const text = (input.value || '').trim();
+  if (!text) return;
+  input.value = '';
+  chatHistory.push({ role:'user', content:text });
+  saveLocal();
+  appendBubble('user', text);
+  btn.disabled = true;
+  document.getElementById('xbTyping').hidden = false;
+  try {
+    const payload = { message: text, history: chatHistory.slice(0, -1).slice(-12) };
+    const r = await LovePage.api('/api/ai/chat', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    });
+    const data = r && r.data ? r.data : null;
+    let reply = (data && data.reply) || r.message || '小布没说清楚…';
+    if (r.code === 200 && data && data.action === 'add_dishes') {
+      // 加购：先落盘，成功气泡只能在 durable write 之后出现
+      const actionOk = await applyAction(data);
+      const durable = !!(actionOk && data.cartSynced);
+      if (!durable) {
+        reply = '呜…购物车没写成功，不能算加进去。请再试一次或去「点单」页手动加～';
+        LovePage.toast('加入购物车失败');
+      } else {
+        // 仅使用后端确认后的成功文案（忽略可能泄漏的 r.message）
+        reply = data.reply || '好～已经加进购物车啦，去点单页确认一下呀～';
+      }
+      chatHistory.push({ role:'assistant', content: reply });
+      saveLocal();
+      appendBubble('assistant', reply);
+    } else if (r.code === 200) {
+      chatHistory.push({ role:'assistant', content: reply });
+      saveLocal();
+      appendBubble('assistant', reply);
+      await applyAction(data);
+    } else if (r.code === 402 || r.code === 503 || r.code === 502 || r.code === 504) {
+      chatHistory.push({ role:'assistant', content: reply });
+      saveLocal();
+      appendBubble('assistant', reply);
+    } else if (r.code && r.code !== 200) {
+      chatHistory.push({ role:'assistant', content: reply });
+      saveLocal();
+      appendBubble('assistant', reply);
+      LovePage.toast(r.message || '发送失败');
+    } else {
+      chatHistory.push({ role:'assistant', content: reply });
+      saveLocal();
+      appendBubble('assistant', reply);
+    }
+  } catch (e) {
+    const fail = '网络不太好，小布没收到～';
+    chatHistory.push({ role:'assistant', content: fail });
+    saveLocal();
+    appendBubble('assistant', fail);
+  } finally {
+    btn.disabled = false;
+    document.getElementById('xbTyping').hidden = true;
+  }
+}
+(async function () {
+  const u = await LovePage.ready({ chefOnly: false });
+  if (!u) return;
+  loadLocal();
+  renderAll();
+})();
+</script>
+</body>
+</html>

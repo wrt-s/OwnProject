@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FCE8EE">
+<title>每日签到 · Love</title>
+<link rel="stylesheet" href="/css/love.css">
+
+<style>
+
+</style>
+</head>
+<body>
+<div class="app subpage">
+  <header class="sub-header">
+    <button type="button" class="back-btn" onclick="LovePage.back()" aria-label="返回">‹</button>
+    <div class="sub-title">每日签到</div>
+    
+  </header>
+  <main class="sub-body">
+
+<div class="lp-hero">
+  <div class="emoji">📅</div>
+  <div class="desc">每天签到领取爱心币奖励</div>
+</div>
+<div class="lp-card" style="text-align:center">
+  <h2>今日签到</h2>
+  <button id="checkinBtn" class="lp-btn" type="button" onclick="doCheckin()" style="min-width:160px;margin:8px 0 12px">点击签到</button>
+  <div id="checkinStatus" class="meta" style="color:var(--muted);font-size:13px">加载中…</div>
+</div>
+<div class="lp-stats">
+  <div class="lp-stat"><div class="ico">🔥</div><div class="val" id="continuousDays">0</div><div class="lbl">连续天数</div></div>
+  <div class="lp-stat"><div class="ico">📊</div><div class="val" id="totalDays">0</div><div class="lbl">总签到</div></div>
+  <div class="lp-stat"><div class="ico">📅</div><div class="val" id="monthDays">0</div><div class="lbl">本月</div></div>
+</div>
+<div class="lp-card">
+  <h3>🎁 签到奖励规则</h3>
+  <ul class="reward-list">
+    <li><span>基础奖励</span><span class="amt">5 爱心币</span></li>
+    <li><span>连续 3 天以上</span><span class="amt">7 爱心币</span></li>
+    <li><span>连续 7 天以上</span><span class="amt">10 爱心币</span></li>
+    <li><span>连续 14 天以上</span><span class="amt">15 爱心币</span></li>
+    <li><span>连续 30 天以上</span><span class="amt">20 爱心币 🌟</span></li>
+  </ul>
+</div>
+<div class="lp-card">
+  <h3>📜 最近签到记录</h3>
+  <div id="historyList" class="lp-list"><div class="lp-empty"><div class="ico">⏳</div><p>加载中…</p></div></div>
+</div>
+
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/love-page.js"></script>
+
+<script>
+
+let userId = null;
+(async function () {
+  const u = await LovePage.ready({ chefOnly: false });
+  if (!u) return;
+  userId = LovePage.getUserId();
+  if (typeof window.__afterAuth === 'function') await window.__afterAuth();
+})();
+
+
+async function loadCheckinStatus() {
+  try {
+    const r = await LovePage.api(`/api/checkin/status/${userId}`);
+    const el = document.getElementById('checkinStatus');
+    const btn = document.getElementById('checkinBtn');
+    if (r.code === 200) {
+      const checked = (typeof r.data === 'boolean') ? r.data
+        : !!(r.data && (r.data.checkedIn || r.data.hasCheckedIn || r.data.todayChecked || r.data.isCheckedInToday));
+      if (checked) {
+        el.textContent = '今日已签到 ✓';
+        btn.disabled = true;
+        btn.textContent = '已签到';
+      } else {
+        el.textContent = '今天还没签到，点一下领币吧';
+        btn.disabled = false;
+        btn.textContent = '点击签到';
+      }
+    } else {
+      el.textContent = r.message || '状态加载失败';
+    }
+  } catch (e) {
+    document.getElementById('checkinStatus').textContent = '网络错误';
+  }
+}
+async function doCheckin() {
+  const btn = document.getElementById('checkinBtn');
+  btn.disabled = true;
+  try {
+    const r = await LovePage.api(`/api/checkin/do?userId=${userId}`, { method: 'POST' });
+    const ok = r.code === 200 || r.success === true;
+    if (ok && !r.alreadyCheckedIn) {
+      const reward = r.coinsReward || r.reward || (r.data && (r.data.reward || r.data.coins || r.data.amount)) || '';
+      LovePage.toast(reward ? `签到成功，+${reward} 爱心币` : (r.message || '签到成功'));
+      await loadCheckinStatus();
+      await loadStats();
+      await loadHistory();
+    } else {
+      LovePage.toast(r.message || (r.alreadyCheckedIn ? '今天已经签到过了' : '签到失败'));
+      btn.disabled = false;
+      await loadCheckinStatus();
+    }
+  } catch (e) {
+    LovePage.toast('网络错误');
+    btn.disabled = false;
+  }
+}
+async function loadStats() {
+  try {
+    const r = await LovePage.api(`/api/checkin/stats/${userId}`);
+    if (r.code === 200 && r.data) {
+      const d = r.data;
+      document.getElementById('continuousDays').textContent = d.currentContinuousDays ?? d.continuousDays ?? d.streak ?? d.continuous ?? 0;
+      document.getElementById('totalDays').textContent = d.totalDays ?? d.total ?? 0;
+      document.getElementById('monthDays').textContent = d.monthDays ?? d.monthCount ?? d.thisMonth ?? 0;
+    }
+  } catch (e) {}
+}
+async function loadHistory() {
+  const box = document.getElementById('historyList');
+  try {
+    const r = await LovePage.api(`/api/checkin/history/${userId}`);
+    const list = (r.code === 200 && (r.data?.list || r.data)) || [];
+    const arr = Array.isArray(list) ? list : [];
+    if (!arr.length) {
+      box.innerHTML = '<div class="lp-empty"><div class="ico">📭</div><p>暂无签到记录</p></div>';
+      return;
+    }
+    box.innerHTML = arr.slice(0, 20).map(h => {
+      const date = h.checkinDate || h.date || h.createTime || '';
+      const reward = h.coinsReward ?? h.coinReward ?? h.reward ?? h.coins ?? h.amount ?? '';
+      return `<div class="lp-item"><div class="row"><span class="title">${LovePage.escapeHtml(String(date).slice(0,16))}</span><span class="amt" style="color:var(--rose);font-weight:750">+${LovePage.escapeHtml(String(reward))} 币</span></div></div>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>';
+  }
+}
+window.__afterAuth = async () => {
+  await loadCheckinStatus();
+  await loadStats();
+  await loadHistory();
+};
+
+</script>
+</body>
+</html>

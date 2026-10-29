@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FCE8EE">
+<title>家人位置 · Love</title>
+<link rel="stylesheet" href="/css/love.css">
+<style>
+.loc-fetch-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+.loc-item {
+  background: var(--card,#fff);
+  border: 1px solid var(--rose-line,#F3D5DC);
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+.loc-item .name-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.loc-item .name { font-weight: 700; font-size: 15px; }
+.loc-item .tag {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+}
+.loc-item .tag.self { background: #FFE8EF; color: var(--rose,#E85A7A); }
+.loc-item .tag.chef { background: #EEF2FF; color: #4F6BED; }
+.loc-item .tag.orderer { background: #F3F4F6; color: #6B7280; }
+.loc-item .seen {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text, #2C292A);
+}
+.loc-item .seen .abs {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--muted);
+}
+.loc-item .dist {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #4F6BED;
+}
+.loc-item.none .dist,
+.loc-item.none .seen { color: var(--muted); font-weight: 550; }
+.loc-addr {
+  display: block;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #F7FAFF;
+  border: 1px solid #D6E4FF;
+  color: #1D4ED8;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.loc-addr:active { background: #EEF2FF; }
+.loc-addr .ttl { font-size: 13px; font-weight: 700; line-height: 1.35; }
+.loc-addr .sub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 550;
+  color: #3B82F6;
+  line-height: 1.4;
+}
+.loc-addr .hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.loc-addr.disabled {
+  background: #FAF2F4;
+  border-color: var(--rose-line, #F3D5DC);
+  color: var(--muted);
+  pointer-events: none;
+}
+.loc-fields {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #F3D5DC;
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 4px 8px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.loc-fields .k { color: var(--muted); }
+.loc-fields .v { color: var(--text); font-weight: 550; word-break: break-all; }
+.loc-fields .v.acc-ok { color: #059669; }
+.loc-fields .v.acc-warn { color: #D97706; font-weight: 700; }
+.loc-fields .v.acc-bad { color: #DC2626; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="app subpage">
+  <header class="sub-header">
+    <button type="button" class="back-btn" onclick="LovePage.back()" aria-label="返回">‹</button>
+    <div class="sub-title">家人位置</div>
+    <div class="sub-right">
+      <button type="button" class="chip" id="refreshBtn" onclick="refreshAll()">刷新位置</button>
+    </div>
+  </header>
+  <main class="sub-body">
+    <div class="loc-fetch-meta" id="fetchMeta" hidden>
+      <span id="fetchedAtLabel">列表拉取：—</span>
+    </div>
+    <div id="locList" class="lp-list">
+      <div class="lp-empty"><div class="ico">📡</div><p>加载中…</p></div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/love-page.js?v=loc5"></script>
+<script>
+let lastOrigin = null;
+let lastFetchedAt = null;
+
+function fmtCoord(v) {
+  if (v == null || v === '') return '—';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return LovePage.escapeHtml(String(v));
+  return n.toFixed(6);
+}
+
+function openInAmap(lat, lng, name) {
+  const n = name || '家人位置';
+  const enc = encodeURIComponent(n);
+  const latN = Number(lat);
+  const lngN = Number(lng);
+  if (!Number.isFinite(latN) || !Number.isFinite(lngN)) {
+    LovePage.toast('无效坐标');
+    return;
+  }
+  const web = 'https://uri.amap.com/marker?position=' + lngN + ',' + latN + '&name=' + enc;
+  const ua = navigator.userAgent || '';
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
+  let appUrl = null;
+  if (isIOS) {
+    appUrl = 'iosamap://viewMap?sourceApplication=Love&poiname=' + enc + '&lat=' + latN + '&lon=' + lngN + '&dev=0';
+  } else if (isAndroid) {
+    appUrl = 'androidamap://viewMap?sourceApplication=Love&poiname=' + enc + '&lat=' + latN + '&lon=' + lngN + '&dev=0';
+  }
+  if (!appUrl) {
+    window.open(web, '_blank');
+    return;
+  }
+  const start = Date.now();
+  let fallen = false;
+  const fallback = () => {
+    if (fallen) return;
+    fallen = true;
+    if (Date.now() - start < 1600) location.href = web;
+  };
+  const t = setTimeout(fallback, 1200);
+  window.addEventListener('pagehide', () => clearTimeout(t), { once: true });
+  window.addEventListener('blur', () => clearTimeout(t), { once: true });
+  location.href = appUrl;
+}
+
+function addressBlock(m) {
+  const place = (m.placeName || '').trim();
+  const street = (m.street || '').trim();
+  const full = (m.address || '').trim();
+  const text = (m.addressText || '').trim() || [place, street].filter(Boolean).join(' · ') || full;
+  if (!text) {
+    return `<div class="loc-addr disabled">
+      <div class="ttl">暂无地名</div>
+    </div>`;
+  }
+  const title = LovePage.escapeHtml(place || text);
+  const subParts = [];
+  if (street && street !== place) subParts.push(street);
+  if (full && full !== place && full !== street) subParts.push(full);
+  const sub = LovePage.escapeHtml(subParts.join(' · ') || (street || full || ''));
+  const lat = Number(m.lat);
+  const lng = Number(m.lng);
+  const nameAttr = LovePage.escapeHtml(place || text);
+  return `<a class="loc-addr" href="javascript:void(0)" role="button"
+      data-lat="${lat}" data-lng="${lng}" data-name="${nameAttr}"
+      onclick="openInAmap(this.dataset.lat, this.dataset.lng, this.dataset.name)">
+    <div class="ttl">📍 ${title}</div>
+    ${sub ? `<div class="sub">${sub}</div>` : ''}
+    <div class="hint">点击打开高德地图</div>
+  </a>`;
+}
+
+function renderMembers(members, meta) {
+  const box = document.getElementById('locList');
+  const fetchMeta = document.getElementById('fetchMeta');
+  const fetchedAtLabel = document.getElementById('fetchedAtLabel');
+  if (meta) {
+    lastFetchedAt = meta.fetchedAt || lastFetchedAt;
+    if (fetchMeta && lastFetchedAt) {
+      fetchMeta.hidden = false;
+      if (fetchedAtLabel) fetchedAtLabel.textContent = '列表拉取：' + lastFetchedAt;
+    }
+  }
+  if (!Array.isArray(members) || !members.length) {
+    box.innerHTML = '<div class="lp-empty"><div class="ico">🏠</div><p>暂无家庭成员</p></div>';
+    return;
+  }
+  box.innerHTML = members.map(m => {
+    const name = LovePage.escapeHtml(m.nickname || '家人');
+    const roleLabel = LovePage.escapeHtml(m.roleLabel || '');
+    const selfTag = m.self ? '<span class="tag self">我</span>' : '';
+    const roleTag = `<span class="tag ${(m.role==='CHEF'||m.role==='ADMIN')?'chef':'orderer'}">${roleLabel}</span>`;
+    if (!m.hasLocation) {
+      return `<div class="loc-item none">
+        <div class="name-row"><span class="name">${name}</span>${selfTag}${roleTag}</div>
+        <div class="seen">暂无位置</div>
+        <div class="dist">—</div>
+      </div>`;
+    }
+    const ago = LovePage.escapeHtml(m.agoText || '');
+    const abs = LovePage.escapeHtml(m.updatedAtText || '');
+    const lastSeen = LovePage.escapeHtml(m.lastSeenText || (ago ? ('上次上报 · ' + ago) : '已有位置'));
+    const dist = LovePage.escapeHtml(m.distanceText || '—');
+    const latT = LovePage.escapeHtml(m.latText || fmtCoord(m.lat));
+    const lngT = LovePage.escapeHtml(m.lngText || fmtCoord(m.lng));
+    const accNum = m.accuracy != null ? Number(m.accuracy) : NaN;
+    const accRaw = m.accuracyText || (Number.isFinite(accNum) ? (Math.round(accNum) + ' 米') : '—');
+    let accCls = '';
+    let accNote = '';
+    if (Number.isFinite(accNum)) {
+      if (accNum <= 50) { accCls = 'acc-ok'; }
+      else if (accNum <= 120) { accCls = 'acc-warn'; accNote = '（一般）'; }
+      else { accCls = 'acc-bad'; accNote = '（较粗，可能偏几百米）'; }
+    }
+    const acc = LovePage.escapeHtml(accRaw + accNote);
+    return `<div class="loc-item">
+      <div class="name-row"><span class="name">${name}</span>${selfTag}${roleTag}</div>
+      <div class="seen">${lastSeen}${abs ? `<span class="abs">绝对时间 ${abs}</span>` : ''}</div>
+      <div class="dist">距你 ${dist}</div>
+      ${addressBlock(m)}
+      <div class="loc-fields">
+        <span class="k">纬度</span><span class="v">${latT}</span>
+        <span class="k">经度</span><span class="v">${lngT}</span>
+        <span class="k">精度</span><span class="v ${accCls}">${acc}</span>
+        <span class="k">相对</span><span class="v">${ago || '—'}</span>
+        <span class="k">绝对</span><span class="v">${abs || '—'}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadList(origin) {
+  const box = document.getElementById('locList');
+  try {
+    const qs = new URLSearchParams();
+    qs.set('_', String(Date.now()));
+    if (origin && origin.lat != null && origin.lng != null) {
+      qs.set('originLat', String(origin.lat));
+      qs.set('originLng', String(origin.lng));
+    }
+    const r = await LovePage.api('/api/family-location/list?' + qs.toString());
+    if (r.code === 403) {
+      LovePage.toast(r.message || '仅做餐方可查看');
+      setTimeout(() => location.replace('/?denied=chef'), 600);
+      return null;
+    }
+    if (r.code !== 200) throw new Error(r.message || 'fail');
+    const data = r.data || {};
+    renderMembers(data.members || [], { fetchedAt: data.fetchedAt });
+    return data;
+  } catch (e) {
+    box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>';
+    return null;
+  }
+}
+
+function selfToastPart(pos) {
+  if (!pos || !pos.ok) {
+    const r = pos && pos.reason;
+    if (r === 'denied') {
+      return pos.insecure
+        ? '定位被拒绝（请安装含原生定位的新版 App 后重试）'
+        : '定位被拒绝（请开系统位置权限；App 请用新版）';
+    }
+    if (r === 'timeout') return '定位未成功（超时）';
+    if (r === 'unavailable') return '定位未成功（请打开手机定位）';
+    if (r === 'unsupported') return '定位未成功（环境不支持）';
+    if (r === 'http') return '定位拿到了但上报失败';
+    return '定位未成功';
+  }
+  const st = pos.status || '';
+  if (st === 'stale_good') return '沿用刚才精确位置（后台继续精修）';
+  if (st === 'coarse_rejected') return '已拒绝粗略网络定位，保留上次精确位置';
+  if (st === 'refined') return '已精修自己定位';
+  if (st === 'fresh_gps' || st === 'gps') {
+    const a = pos.accuracy != null ? Math.round(Number(pos.accuracy)) : null;
+    return a != null ? ('已更新自己（GPS ±' + a + '米）') : '已更新自己';
+  }
+  if (pos.changed === false) return '自己定位未变';
+  return '已更新自己';
+}
+
+async function refreshAll() {
+  const btn = document.getElementById('refreshBtn');
+  if (btn) btn.disabled = true;
+  LovePage.toast('正在刷新…');
+  const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  try {
+    // Parallel: self-locate (with short timeout) + list fetch — do not block list on slow GPS
+    const reportP = LovePage.reportLocation({ force: true, toastOnError: false, timeoutMs: 10000 });
+    const listP = loadList(lastOrigin);
+    const dataFirst = await listP;
+    if (dataFirst) {
+      // list shown ASAP; self update continues in background
+    }
+    const pos = await reportP;
+    if (pos && pos.ok) {
+      lastOrigin = { lat: pos.lat, lng: pos.lng };
+      // Re-fetch list with fresh origin for accurate distances (non-blocking feel: only if list already shown)
+      const data2 = await loadList(lastOrigin);
+      const data = data2 || dataFirst;
+      if (!data) {
+        LovePage.toast(selfToastPart(pos) + ' · 列表刷新失败');
+        return;
+      }
+      const withLoc = (data.members || []).filter(m => m && m.hasLocation).length;
+      const total = (data.members || []).length;
+      const ms = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+      LovePage.toast(selfToastPart(pos) + ' · 已拉取全员最新（' + withLoc + '/' + total + ' 有位置）');
+      try { console.info('[love-loc] refreshAll ms=', ms); } catch (e) {}
+      return;
+    }
+    if (!dataFirst) {
+      LovePage.toast(selfToastPart(pos) + ' · 列表刷新失败');
+      return;
+    }
+    const withLoc = (dataFirst.members || []).filter(m => m && m.hasLocation).length;
+    const total = (dataFirst.members || []).length;
+    LovePage.toast(selfToastPart(pos) + ' · 已拉取全员最新（' + withLoc + '/' + total + ' 有位置）');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+(async function () {
+  const u = await LovePage.ready({ chefOnly: true });
+  if (!u) return;
+  // Show list immediately; self-locate in parallel (don't wait for GPS)
+  const listP = loadList(lastOrigin);
+  const reportP = LovePage.reportLocation({ force: false, toastOnError: false, timeoutMs: 10000 }).catch(() => null);
+  await listP;
+  try {
+    const pos = await reportP;
+    if (pos && pos.ok) {
+      lastOrigin = { lat: pos.lat, lng: pos.lng };
+      await loadList(lastOrigin);
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

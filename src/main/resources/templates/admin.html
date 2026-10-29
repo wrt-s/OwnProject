@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FCE8EE">
+<title>菜品后台 · Love</title>
+<link rel="stylesheet" href="/css/love.css">
+<style>
+.admin-sec{display:none}.admin-sec.active{display:block}
+.dish-row{display:flex;gap:10px;align-items:flex-start}
+.dish-row .info{flex:1;min-width:0}
+.badge-sold{font-size:10px;font-weight:700;color:#fff;background:var(--danger);padding:2px 8px;border-radius:999px}
+.badge-on{font-size:10px;font-weight:700;color:#fff;background:var(--ok);padding:2px 8px;border-radius:999px}
+</style>
+</head>
+<body>
+<div class="app subpage">
+  <header class="sub-header">
+    <button type="button" class="back-btn" onclick="LovePage.back()" aria-label="返回">‹</button>
+    <div class="sub-title">菜品后台</div>
+  </header>
+  <main class="sub-body">
+<div class="lp-tabs" id="adminTabs">
+  <button class="lp-tab active" type="button" data-tab="dishes" onclick="switchAdmin('dishes')">菜品</button>
+  <button class="lp-tab" type="button" data-tab="cats" onclick="switchAdmin('cats')">分类</button>
+  <button class="lp-tab" type="button" data-tab="orders" onclick="switchAdmin('orders')">订单</button>
+  <button class="lp-tab" type="button" data-tab="logs" onclick="switchAdmin('logs')">日志</button>
+</div>
+
+<section class="admin-sec active" id="sec-dishes">
+  <div style="margin-bottom:12px"><button class="lp-btn block" type="button" onclick="openDishModal()">＋ 新增菜品</button></div>
+  <div class="lp-field"><input id="dishFilter" type="search" placeholder="搜索菜品" oninput="renderDishes()"></div>
+  <div id="dishList" class="lp-list"><div class="lp-empty"><p>加载中…</p></div></div>
+</section>
+
+<section class="admin-sec" id="sec-cats">
+  <div style="margin-bottom:12px"><button class="lp-btn block" type="button" onclick="openCatModal()">＋ 新增分类</button></div>
+  <div id="catList" class="lp-list"><div class="lp-empty"><p>加载中…</p></div></div>
+</section>
+
+<section class="admin-sec" id="sec-orders">
+  <div class="lp-chips" id="orderFilter">
+    <button class="lp-chip active" type="button" data-s="all" onclick="setOrderFilter('all')">全部</button>
+    <button class="lp-chip" type="button" data-s="pending" onclick="setOrderFilter('pending')">待接单</button>
+    <button class="lp-chip" type="button" data-s="cooking" onclick="setOrderFilter('cooking')">制作中</button>
+    <button class="lp-chip" type="button" data-s="ready" onclick="setOrderFilter('ready')">待取餐</button>
+  </div>
+  <div id="orderList" class="lp-list"><div class="lp-empty"><p>加载中…</p></div></div>
+</section>
+
+
+<section class="admin-sec" id="sec-logs">
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <button class="lp-btn sm" type="button" onclick="loadLogs()">刷新</button>
+    <button class="lp-btn sm danger" type="button" onclick="clearLogs()">清空日志</button>
+  </div>
+  <div class="lp-chips" id="logFilterChips" style="margin-bottom:10px">
+    <button class="lp-chip active" type="button" data-mod="" onclick="setLogModule('')">全部</button>
+    <button class="lp-chip" type="button" data-mod="登录" onclick="setLogModule('登录')">登录</button>
+    <button class="lp-chip" type="button" data-mod="订单" onclick="setLogModule('订单')">订单</button>
+    <button class="lp-chip" type="button" data-mod="菜品" onclick="setLogModule('菜品')">菜品</button>
+  </div>
+  <div class="lp-field"><input id="logModule" type="search" placeholder="按模块筛选（如：登录）" onchange="loadLogs()"></div>
+  <div id="logList" class="lp-list"><div class="lp-empty"><p>打开本页签后加载</p></div></div>
+</section>
+
+<div class="lp-modal-mask" id="dishModal" onclick="if(event.target===this)closeDishModal()">
+  <div class="lp-modal" onclick="event.stopPropagation()">
+    <div class="handle"></div>
+    <div class="hd"><span id="dishModalTitle">新增菜品</span><button class="x" type="button" onclick="closeDishModal()">×</button></div>
+    <input type="hidden" id="dId">
+    <div class="lp-field"><label>名称</label><input id="dName" placeholder="菜品名"></div>
+    <div class="lp-field"><label>分类</label><select id="dCat"></select></div>
+    <div class="lp-field"><label>价格（爱心币）</label><input id="dPrice" type="number" min="0" value="10"></div>
+    <div class="lp-field"><label>描述</label><textarea id="dDesc" placeholder="简介"></textarea></div>
+    <div class="lp-field"><label>标签（逗号分隔）</label><input id="dTags" placeholder="辣,家常"></div>
+    <div class="lp-field"><label>图片 URL</label><input id="dImg" placeholder="可粘贴链接或下方上传" oninput="onDishImageUrlInput()"></div>
+    <div class="lp-field"><label>上传图片</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="dImgFile" type="file" accept="image/*" onchange="uploadDishImage(this)" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;z-index:-1" tabindex="-1" aria-hidden="true">
+        <button type="button" class="lp-btn" id="dImgPickBtn" onclick="document.getElementById('dImgFile').click()"
+          style="padding:8px 14px;background:linear-gradient(135deg,#FF8FA3,#E85A7A);border:none;color:#fff;font-size:13px;font-weight:600;border-radius:12px">选择图片</button>
+        <button type="button" class="lp-btn" id="dImgClearBtn" onclick="clearDishImage()" style="display:none;padding:8px 12px;background:#fff;border:1px solid #f0c9d4;color:#996;font-size:13px;border-radius:12px">清除图片</button>
+      </div>
+      <div id="dImgFileStatus" style="margin-top:8px;font-size:13px;color:#996">未选择文件</div>
+    </div>
+    <div id="dImgPreview" style="margin:0 0 12px;font-size:12px;color:#996"></div>
+    <div class="lp-chips" style="margin-bottom:12px">
+      <label class="lp-chip"><input type="checkbox" id="dSig" style="margin-right:4px">拿手菜</label>
+      <label class="lp-chip"><input type="checkbox" id="dNew" style="margin-right:4px">新品</label>
+      <label class="lp-chip"><input type="checkbox" id="dRec" style="margin-right:4px">推荐</label>
+    </div>
+    <button class="lp-btn block" type="button" onclick="saveDish()">保存</button>
+  </div>
+</div>
+
+<div class="lp-modal-mask" id="catModal" onclick="if(event.target===this)closeCatModal()">
+  <div class="lp-modal" onclick="event.stopPropagation()">
+    <div class="handle"></div>
+    <div class="hd"><span id="catModalTitle">新增分类</span><button class="x" type="button" onclick="closeCatModal()">×</button></div>
+    <input type="hidden" id="cId">
+    <div class="lp-field"><label>名称</label><input id="cName" placeholder="分类名"></div>
+    <div class="lp-field"><label>图标</label><input id="cIcon" placeholder="例如 🍜" value="🍜"></div>
+    <div class="lp-field"><label>排序</label><input id="cSort" type="number" value="0"></div>
+    <button class="lp-btn block" type="button" onclick="saveCat()">保存</button>
+  </div>
+</div>
+</main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/love-page.js"></script>
+
+<script>
+let userId = null;
+(async function () {
+  const u = await LovePage.ready({ chefOnly: false });
+  if (!u) return;
+  userId = LovePage.getUserId();
+  applyAdminRoleUI();
+  if (typeof window.__afterAuth === 'function') await window.__afterAuth();
+})();
+
+function applyAdminRoleUI(){
+  const chef = LovePage.isChef();
+  document.body.classList.toggle('is-chef', chef);
+  // 点单方：仅菜品/分类；订单与日志仍仅做餐方
+  document.querySelectorAll('#adminTabs .lp-tab').forEach(t => {
+    const tab = t.dataset.tab;
+    if (tab === 'orders' || tab === 'logs') {
+      t.style.display = chef ? '' : 'none';
+    }
+  });
+  if (!chef) {
+    const title = document.querySelector('.sub-title');
+    if (title) title.textContent = '菜品管理';
+    // 确保落在菜品页
+    if (typeof switchAdmin === 'function') switchAdmin('dishes');
+  }
+}
+
+
+let dishes=[], categories=[], orders=[], orderFilter='all', editingDish=null, editingCat=null;
+const STATUS_MAP={pending:'待接单',cooking:'制作中',ready:'待取餐',completed:'已完成',cancelled:'已取消',canceled:'已取消'};
+const STATUS_ALIAS={confirmed:'pending',received:'pending',preparing:'cooking',delivered:'ready'};
+function normalizeStatus(s){ if(!s) return s; const k=String(s).trim().toLowerCase(); return STATUS_ALIAS[k]||k; }
+function statusLabel(s){ return STATUS_MAP[normalizeStatus(s)]||s; }
+const CHEF_NEXT={
+  pending:[{status:'cooking',label:'接单制作'}],
+  cooking:[{status:'ready',label:'做好了'}],
+  ready:[{status:'completed',label:'完成'}]
+};
+
+function switchAdmin(tab){
+  if (!LovePage.isChef() && (tab === 'orders' || tab === 'logs')) tab = 'dishes';
+  document.querySelectorAll('#adminTabs .lp-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===tab));
+  document.querySelectorAll('.admin-sec').forEach(s=>s.classList.toggle('active', s.id==='sec-'+tab));
+  if(tab==='orders') loadOrders();
+  if(tab==='logs') loadLogs();
+}
+
+async function loadCategories(){
+  const r=await LovePage.api('/api/category/all');
+  categories=(r.code===200&&(r.data?.list||r.data))||[];
+  if(!Array.isArray(categories)) categories=[];
+  fillCatSelect();
+  renderCats();
+}
+function fillCatSelect(){
+  const sel=document.getElementById('dCat');
+  sel.innerHTML=categories.map(c=>`<option value="${c.id}">${LovePage.escapeHtml((c.icon||'')+' '+(c.name||''))}</option>`).join('')||'<option value="">无分类</option>';
+}
+function renderCats(){
+  const box=document.getElementById('catList');
+  if(!categories.length){ box.innerHTML='<div class="lp-empty"><p>暂无分类</p></div>'; return; }
+  box.innerHTML=categories.map(c=>`<div class="lp-item">
+    <div class="row"><span class="title">${LovePage.escapeHtml((c.icon||'')+' '+(c.name||''))}</span><span class="meta">排序 ${c.sortOrder??0}</span></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="lp-btn sm ghost" type="button" onclick="editCat(${c.id})">编辑</button>
+      <button class="lp-btn sm danger" type="button" onclick="deleteCat(${c.id})">删除</button>
+    </div>
+  </div>`).join('');
+}
+function openCatModal(){
+  editingCat=null;
+  document.getElementById('catModalTitle').textContent='新增分类';
+  document.getElementById('cId').value='';
+  document.getElementById('cName').value='';
+  document.getElementById('cIcon').value='🍜';
+  document.getElementById('cSort').value='0';
+  document.getElementById('catModal').classList.add('show');
+}
+function editCat(id){
+  const c=categories.find(x=>x.id===id); if(!c) return;
+  editingCat=c;
+  document.getElementById('catModalTitle').textContent='编辑分类';
+  document.getElementById('cId').value=c.id;
+  document.getElementById('cName').value=c.name||'';
+  document.getElementById('cIcon').value=c.icon||'🍜';
+  document.getElementById('cSort').value=c.sortOrder??0;
+  document.getElementById('catModal').classList.add('show');
+}
+function closeCatModal(){ document.getElementById('catModal').classList.remove('show'); }
+async function saveCat(){
+  const name=document.getElementById('cName').value.trim();
+  const icon=document.getElementById('cIcon').value.trim()||'🍜';
+  const sortOrder=Number(document.getElementById('cSort').value)||0;
+  if(!name){ LovePage.toast('请填写名称'); return; }
+  const payload={name,icon,sortOrder};
+  const url=editingCat?'/api/category/update':'/api/category/add';
+  if(editingCat) payload.id=editingCat.id;
+  const r=await LovePage.api(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(r.code===200){ LovePage.toast('已保存'); closeCatModal(); loadCategories(); }
+  else LovePage.toast(r.message||'保存失败');
+}
+async function deleteCat(id){
+  if(!confirm('删除该分类？')) return;
+  const r=await LovePage.api('/api/category/delete/'+id,{method:'DELETE'});
+  if(r.code===200){ LovePage.toast('已删除'); loadCategories(); }
+  else LovePage.toast(r.message||'删除失败');
+}
+
+async function loadDishes(){
+  const r=await LovePage.api('/api/dish/all');
+  dishes=(r.code===200&&(r.data?.list||r.data))||[];
+  if(!Array.isArray(dishes)) dishes=[];
+  renderDishes();
+}
+function renderDishes(){
+  const box=document.getElementById('dishList');
+  const kw=(document.getElementById('dishFilter').value||'').trim().toLowerCase();
+  let list=dishes;
+  if(kw) list=list.filter(d=>((d.name||'')+(d.tags||'')+(d.description||'')).toLowerCase().includes(kw));
+  if(!list.length){ box.innerHTML='<div class="lp-empty"><p>暂无菜品</p></div>'; return; }
+  box.innerHTML=list.map(d=>{
+    const sold=d.isSoldOut===1;
+    const cat=categories.find(c=>c.id===d.categoryId);
+    return `<div class="lp-item"><div class="dish-row">
+      <div class="info">
+        <div class="row"><span class="title">${LovePage.escapeHtml(d.name||'')}</span>${sold?'<span class="badge-sold">售罄</span>':'<span class="badge-on">在售</span>'}</div>
+        <div class="meta">${LovePage.escapeHtml(cat?((cat.icon||'')+cat.name):'未分类')} · 💖 ${d.price??0}</div>
+        <div class="meta">${LovePage.escapeHtml(d.description||'')}</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+      <button class="lp-btn sm ghost" type="button" onclick="editDish(${d.id})">编辑</button>
+      <button class="lp-btn sm" type="button" onclick="toggleSold(${d.id},${d.isSoldOut||0})">${sold?'上架':'下架'}</button>
+      <button class="lp-btn sm danger" type="button" onclick="deleteDish(${d.id})">删除</button>
+    </div></div>`;
+  }).join('');
+}
+function openDishModal(){
+  editingDish=null;
+  document.getElementById('dishModalTitle').textContent='新增菜品';
+  document.getElementById('dId').value='';
+  document.getElementById('dName').value='';
+  document.getElementById('dPrice').value='10';
+  document.getElementById('dDesc').value='';
+  document.getElementById('dTags').value='';
+  clearDishImage(true);
+  document.getElementById('dSig').checked=false;
+  document.getElementById('dNew').checked=false;
+  document.getElementById('dRec').checked=false;
+  fillCatSelect();
+  document.getElementById('dishModal').classList.add('show');
+}
+function editDish(id){
+  const d=dishes.find(x=>x.id===id); if(!d) return;
+  editingDish=d;
+  document.getElementById('dishModalTitle').textContent='编辑菜品';
+  document.getElementById('dId').value=d.id;
+  document.getElementById('dName').value=d.name||'';
+  document.getElementById('dPrice').value=d.price??0;
+  document.getElementById('dDesc').value=d.description||'';
+  document.getElementById('dTags').value=d.tags||'';
+  setDishImageUI(d.imageUrl||'', null);
+  document.getElementById('dSig').checked=!!d.isSignature;
+  document.getElementById('dNew').checked=!!d.isNew;
+  document.getElementById('dRec').checked=!!d.isRecommended;
+  fillCatSelect();
+  document.getElementById('dCat').value=d.categoryId||'';
+  document.getElementById('dishModal').classList.add('show');
+}
+function closeDishModal(){ document.getElementById('dishModal').classList.remove('show'); }
+async function saveDish(){
+  const name=document.getElementById('dName').value.trim();
+  const categoryId=Number(document.getElementById('dCat').value)||null;
+  const price=Number(document.getElementById('dPrice').value)||0;
+  const description=document.getElementById('dDesc').value.trim();
+  const tags=document.getElementById('dTags').value.trim();
+  const imageUrl=document.getElementById('dImg').value.trim();
+  if(!name){ LovePage.toast('请填写名称'); return; }
+  const payload={
+    name, categoryId, price, priceType:'爱心币', description, tags,
+    // empty string must be sent so MyBatis can clear image_url (null is skipped by NOT_NULL strategy)
+    imageUrl: imageUrl,
+    isSignature: document.getElementById('dSig').checked?1:0,
+    isNew: document.getElementById('dNew').checked?1:0,
+    isRecommended: document.getElementById('dRec').checked?1:0,
+    isSoldOut: editingDish ? (editingDish.isSoldOut||0) : 0
+  };
+  const url=editingDish?'/api/dish/update':'/api/dish/add';
+  if(editingDish) payload.id=editingDish.id;
+  const r=await LovePage.api(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(r.code===200){ LovePage.toast('已保存'); closeDishModal(); loadDishes(); }
+  else LovePage.toast(r.message||'保存失败');
+}
+async function toggleSold(id, current){
+  const r=await LovePage.api('/api/dish/toggleSoldOut',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dishId:id, isSoldOut: current})});
+  if(r.code===200){ LovePage.toast('已更新'); loadDishes(); } else LovePage.toast(r.message||'失败');
+}
+async function deleteDish(id){
+  if(!confirm('确定删除该菜品？')) return;
+  const r=await LovePage.api(`/api/dish/delete/${id}`,{method:'DELETE'});
+  if(r.code===200){ LovePage.toast('已删除'); loadDishes(); } else LovePage.toast(r.message||'删除失败');
+}
+
+function setOrderFilter(s){
+  orderFilter=s;
+  document.querySelectorAll('#orderFilter .lp-chip').forEach(c=>c.classList.toggle('active', c.dataset.s===s));
+  renderOrders();
+}
+async function loadOrders(){
+  const r=await LovePage.api('/api/order/list');
+  orders=(r.code===200&&(r.data?.list||r.data))||[];
+  if(!Array.isArray(orders)) orders=[];
+  renderOrders();
+}
+function renderOrders(){
+  const box=document.getElementById('orderList');
+  let list=orders;
+  if(orderFilter!=='all'){
+    list=list.filter(o=>normalizeStatus(o.status)===orderFilter);
+  }
+  if(!list.length){ box.innerHTML='<div class="lp-empty"><p>暂无订单</p></div>'; return; }
+  box.innerHTML=list.map(o=>{
+    const ns=normalizeStatus(o.status);
+    const st=statusLabel(o.status);
+    const next=CHEF_NEXT[ns]||[];
+    const btns=next.map(n=>`<button class="lp-btn sm" type="button" onclick="updateStatus('${LovePage.escapeHtml(String(o.orderNo||o.id))}','${n.status}')">${n.label}</button>`).join('');
+    const time=(o.createTime||o.createdAt||'').toString().slice(0,16).replace('T',' ');
+    return `<div class="lp-item">
+      <div class="row"><span class="title">#${LovePage.escapeHtml(String(o.orderNo||o.id))}</span><span class="status-pill status-${LovePage.escapeHtml(String(ns||''))}">${LovePage.escapeHtml(st)}</span></div>
+      <div class="meta">${LovePage.escapeHtml(time)} · 用户 #${o.userId??'-'} · 💖 ${o.totalPrice??o.totalAmount??o.amount??0}</div>
+      <div class="meta">备注：${LovePage.escapeHtml(o.remark||'无')}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${btns}</div>
+    </div>`;
+  }).join('');
+}
+async function updateStatus(orderNo, status){
+  const r=await LovePage.api('/api/order/status?orderNo='+encodeURIComponent(orderNo)+'&status='+encodeURIComponent(status),{method:'PUT'});
+  if(r.code===200){ LovePage.toast('状态已更新'); loadOrders(); }
+  else LovePage.toast(r.message||'更新失败');
+}
+
+
+function dishImageFileNameFromUrl(url){
+  if(!url) return '';
+  try {
+    const path = String(url).split('?')[0];
+    const seg = path.substring(path.lastIndexOf('/')+1);
+    return decodeURIComponent(seg || '') || '已选图片';
+  } catch (e) { return '已选图片'; }
+}
+function escapeAttr(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function setDishImageUI(url, fileName){
+  const u = (url || '').trim();
+  const imgInput = document.getElementById('dImg');
+  const fileInput = document.getElementById('dImgFile');
+  const preview = document.getElementById('dImgPreview');
+  const status = document.getElementById('dImgFileStatus');
+  const clearBtn = document.getElementById('dImgClearBtn');
+  if (imgInput && imgInput.value !== u) imgInput.value = u;
+  // keep native input cleared so re-selecting same file still fires change
+  if (fileInput) fileInput.value = '';
+  const name = (fileName || dishImageFileNameFromUrl(u) || '').trim();
+  if (preview) {
+    preview.innerHTML = '';
+    if (u) {
+      const img = document.createElement('img');
+      img.alt = '菜品图片预览';
+      img.style.cssText = 'max-width:100%;max-height:140px;border-radius:12px;display:block;background:#fff;border:1px solid #f0c9d4;object-fit:contain';
+      // assign via property so & in presigned MinIO query is NOT entity-encoded incorrectly for fetch
+      img.src = u;
+      img.onerror = function(){
+        preview.innerHTML = '<div style="padding:10px;border:1px dashed #f0c9d4;border-radius:12px;color:#996">图片地址无法加载预览，但仍会保存该 URL</div>';
+      };
+      preview.appendChild(img);
+      if (name) {
+        const cap = document.createElement('div');
+        cap.style.cssText = 'margin-top:6px;color:#996;font-size:12px';
+        cap.textContent = '已选择：' + name;
+        preview.appendChild(cap);
+      }
+    }
+  }
+  if (status) {
+    status.textContent = u ? ('已选择文件' + (name ? ('：' + name) : '')) : '未选择文件';
+    status.style.color = u ? '#E85A7A' : '#996';
+    status.style.fontWeight = u ? '600' : '400';
+  }
+  if (clearBtn) clearBtn.style.display = u ? 'inline-flex' : 'none';
+}
+function onDishImageUrlInput(){
+  const u = (document.getElementById('dImg').value || '').trim();
+  setDishImageUI(u, u ? dishImageFileNameFromUrl(u) : null);
+}
+async function clearDishImage(silent){
+  const id = editingDish && editingDish.id ? editingDish.id : (document.getElementById('dId').value || '');
+  setDishImageUI('', null);
+  if (id && !silent) {
+    try {
+      const r = await LovePage.api('/api/dish/clearImage', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({dishId: Number(id)})
+      });
+      if (r.code === 200) {
+        if (editingDish) editingDish.imageUrl = null;
+        LovePage.toast('已清除图片');
+        return;
+      }
+      LovePage.toast(r.message || '清除图片失败');
+      return;
+    } catch (e) {
+      LovePage.toast('清除图片失败');
+      return;
+    }
+  }
+  if (!silent) LovePage.toast('已清除图片');
+}
+async function uploadDishImage(input){
+  const file = input && input.files && input.files[0];
+  if(!file) return;
+  if(!file.type || !file.type.startsWith('image/')){ LovePage.toast('请选择图片文件'); input.value=''; return; }
+  const status = document.getElementById('dImgFileStatus');
+  if (status) { status.textContent = '上传中… ' + (file.name || ''); status.style.color = '#996'; }
+  const fd = new FormData();
+  fd.append('file', file);
+  try{
+    const res = await fetch('/api/dish/uploadImage', { method:'POST', body: fd, credentials:'same-origin' });
+    const r = await res.json().catch(()=>({code:res.status,message:'上传失败'}));
+    if(r.code===200 && r.data){
+      setDishImageUI(String(r.data), file.name || dishImageFileNameFromUrl(String(r.data)));
+      LovePage.toast('上传成功');
+    } else {
+      LovePage.toast(r.message||'上传失败');
+      const cur = (document.getElementById('dImg').value || '').trim();
+      setDishImageUI(cur, cur ? dishImageFileNameFromUrl(cur) : null);
+    }
+  }catch(e){
+    LovePage.toast('上传出错');
+    const cur = (document.getElementById('dImg').value || '').trim();
+    setDishImageUI(cur, cur ? dishImageFileNameFromUrl(cur) : null);
+  }
+}
+
+function setLogModule(mod){
+  const input = document.getElementById('logModule');
+  if(input) input.value = mod || '';
+  document.querySelectorAll('#logFilterChips .lp-chip').forEach(c=>{
+    c.classList.toggle('active', (c.dataset.mod||'') === (mod||''));
+  });
+  loadLogs();
+}
+
+async function loadLogs(){
+  const box = document.getElementById('logList');
+  if(!box) return;
+  box.innerHTML = '<div class="lp-empty"><p>加载中…</p></div>';
+  try{
+    const module = (document.getElementById('logModule')?.value||'').trim();
+    let url = '/api/operation-log/list?pageNum=1&pageSize=50';
+    if(module) url += '&module=' + encodeURIComponent(module);
+    const r = await LovePage.api(url);
+    const list = (r.code===200 && (r.data?.list || r.data)) || [];
+    const arr = Array.isArray(list) ? list : [];
+    if(!arr.length){ box.innerHTML = '<div class="lp-empty"><p>暂无日志</p></div>'; return; }
+    box.innerHTML = arr.map(l=>{
+      const time = (l.createTime||l.createdAt||l.operationTime||'').toString().slice(0,19).replace('T',' ');
+      const ok = l.status === 1 || l.status === true || l.success === 1 || l.success === true || l.status === 'SUCCESS' || l.status === 'success';
+      const ip = l.ipAddress || l.ip || '';
+      const who = l.username||l.userName||(l.userId!=null?('#'+l.userId):'');
+      return '<div class="lp-item"><div class="row"><span class="title">'+LovePage.escapeHtml((l.module||'')+' · '+(l.operationType||l.type||''))+'</span><span class="meta" style="color:'+(ok?'var(--ok)':'var(--danger)')+'">'+(ok?'成功':'失败')+'</span></div><div class="meta">'+LovePage.escapeHtml(l.description||l.method||'')+'</div><div class="meta">'+LovePage.escapeHtml(time)+(who?(' · '+LovePage.escapeHtml(String(who))):'')+(ip?(' · IP '+LovePage.escapeHtml(String(ip))):'')+(l.costTime!=null?(' · '+l.costTime+'ms'):'')+'</div></div>';
+    }).join('');
+  }catch(e){ box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>'; }
+}
+
+async function clearLogs(){
+  if(!confirm('确定清空全部操作日志？此操作不可恢复')) return;
+  try{
+    const r = await LovePage.api('/api/operation-log/clear', { method:'DELETE' });
+    if(r.code===200){ LovePage.toast('已清空'); loadLogs(); }
+    else LovePage.toast(r.message||'清空失败');
+  }catch(e){ LovePage.toast('网络错误'); }
+}
+
+
+window.__afterAuth=async()=>{
+  await loadCategories();
+  await loadDishes();
+};
+
+</script>
+</body>
+</html>

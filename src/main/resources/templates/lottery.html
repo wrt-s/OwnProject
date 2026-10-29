@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FCE8EE">
+<title>转盘抽奖 · Love</title>
+<link rel="stylesheet" href="/css/love.css">
+
+<style>
+
+.wheel-wrap { position:relative; width:280px; height:280px; margin:12px auto 18px; }
+.wheel {
+  width:100%; height:100%; border-radius:50%;
+  border:6px solid #fff; box-shadow:0 8px 28px rgba(232,90,122,.25);
+  transition: transform 4s cubic-bezier(.17,.67,.12,.99);
+  background: conic-gradient(#F8B4C4 0deg 51.4deg,#E85A7A 51.4deg 102.8deg,#FCE8EE 102.8deg 154.2deg,#F8B4C4 154.2deg 205.6deg,#E85A7A 205.6deg 257deg,#FFF1F4 257deg 308.4deg,#D4456A 308.4deg 360deg);
+  position:relative; overflow:hidden;
+}
+.wheel-labels {
+  position:absolute; inset:0; pointer-events:none;
+}
+.wheel-label {
+  position:absolute; left:50%; top:50%; width:50%;
+  transform-origin:0 0; text-align:center;
+  font-size:11px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.2);
+  padding-left:28%;
+}
+.wheel-pointer {
+  position:absolute; top:-8px; left:50%; transform:translateX(-50%);
+  font-size:28px; z-index:2; filter:drop-shadow(0 2px 4px rgba(0,0,0,.15));
+}
+.prize-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.prize-cell {
+  background:#fff; border:1px solid rgba(243,213,220,.5); border-radius:12px;
+  padding:10px; display:flex; gap:8px; align-items:center;
+}
+
+</style>
+</head>
+<body>
+<div class="app subpage">
+  <header class="sub-header">
+    <button type="button" class="back-btn" onclick="LovePage.back()" aria-label="返回">‹</button>
+    <div class="sub-title">转盘抽奖</div>
+    
+  </header>
+  <main class="sub-body">
+
+<div class="lp-hero"><div class="emoji">🎡</div><div class="desc">试试手气 · 消耗爱心币</div></div>
+<div class="lp-stats">
+  <div class="lp-stat"><div class="ico">🎲</div><div class="val" id="totalDraws">0</div><div class="lbl">抽奖次数</div></div>
+  <div class="lp-stat"><div class="ico">🎁</div><div class="val" id="totalWin">0</div><div class="lbl">累计获奖</div></div>
+  <div class="lp-stat"><div class="ico">💹</div><div class="val" id="netProfit">0</div><div class="lbl">净收益</div></div>
+</div>
+<div class="lp-card">
+  <div class="wheel-wrap">
+    <div class="wheel-pointer">▼</div>
+    <div class="wheel" id="wheel"><div class="wheel-labels" id="wheelLabels"></div></div>
+  </div>
+  <button class="lp-btn block" id="spinBtn" type="button" onclick="spin()">开始抽奖</button>
+</div>
+<div class="lp-card">
+  <h3>奖品一览</h3>
+  <div class="prize-grid" id="prizeList"></div>
+</div>
+<div class="lp-card">
+  <h3>抽奖记录</h3>
+  <div id="historyList" class="lp-list"><div class="lp-empty"><div class="ico">⏳</div><p>加载中…</p></div></div>
+</div>
+<div class="lp-modal-mask" id="resultModal" onclick="if(event.target===this)closeResult()">
+  <div class="lp-modal" onclick="event.stopPropagation()">
+    <div class="handle"></div>
+    <div style="text-align:center;padding:12px 0 8px">
+      <div id="resultIcon" style="font-size:48px">🎁</div>
+      <div id="resultTitle" style="font-size:18px;font-weight:800;margin:8px 0"></div>
+      <div id="resultMessage" style="color:var(--muted);font-size:13px"></div>
+    </div>
+    <button class="lp-btn block" type="button" onclick="closeResult()">好的</button>
+  </div>
+</div>
+
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/love-page.js"></script>
+
+<script>
+
+let userId = null;
+(async function () {
+  const u = await LovePage.ready({ chefOnly: false });
+  if (!u) return;
+  userId = LovePage.getUserId();
+  if (typeof window.__afterAuth === 'function') await window.__afterAuth();
+})();
+
+
+let prizes = [];
+let isSpinning = false;
+let currentRotation = 0;
+
+async function loadPrizes() {
+  try {
+    const r = await LovePage.api('/api/lottery/prizes');
+    if (r.code === 200 && r.data) {
+      prizes = Array.isArray(r.data) ? r.data : (r.data.list || []);
+      renderWheel();
+      renderPrizeList();
+    }
+  } catch (e) { LovePage.toast('加载奖品失败'); }
+}
+function renderWheel() {
+  const labels = document.getElementById('wheelLabels');
+  if (!prizes.length) { labels.innerHTML = ''; return; }
+  const seg = 360 / prizes.length;
+  labels.innerHTML = prizes.map((p, i) => {
+    const rot = i * seg + seg / 2;
+    const name = (p.prizeType === 'thanks') ? '谢谢' : (p.name || p.value || '');
+    return `<div class="wheel-label" style="transform:rotate(${rot}deg)">${LovePage.escapeHtml(String(p.icon||'🎁'))}<br>${LovePage.escapeHtml(String(name).slice(0,6))}</div>`;
+  }).join('');
+}
+function renderPrizeList() {
+  const box = document.getElementById('prizeList');
+  box.innerHTML = prizes.map(p => `
+    <div class="prize-cell">
+      <div style="font-size:22px">${LovePage.escapeHtml(p.icon||'🎁')}</div>
+      <div style="min-width:0">
+        <div style="font-weight:700;font-size:13px">${LovePage.escapeHtml(p.name||'')}</div>
+        <div style="font-size:11px;color:var(--muted)">概率 ${p.probability ?? '-'}%</div>
+      </div>
+    </div>`).join('') || '<div class="lp-empty"><p>暂无奖品配置</p></div>';
+}
+async function spin() {
+  if (isSpinning) return;
+  if (!prizes.length) { LovePage.toast('暂无奖品'); return; }
+  isSpinning = true;
+  const btn = document.getElementById('spinBtn');
+  btn.disabled = true; btn.textContent = '抽奖中…';
+  try {
+    const r = await LovePage.api(`/api/lottery/draw?userId=${userId}`, { method: 'POST' });
+    const ok = r.code === 200 || r.success;
+    const prize = r.prize || r.data?.prize || r.data;
+    if (ok && prize) {
+      const prizeIndex = Math.max(0, prizes.findIndex(p => p.id === prize.id));
+      const segmentAngle = 360 / prizes.length;
+      const targetAngle = 360 - (prizeIndex * segmentAngle) - (segmentAngle / 2);
+      const spins = 5 + Math.random() * 3;
+      const finalRotation = currentRotation + (spins * 360) + targetAngle;
+      const wheel = document.getElementById('wheel');
+      wheel.style.transform = `rotate(${finalRotation}deg)`;
+      currentRotation = finalRotation;
+      setTimeout(() => {
+        showResult({ prize });
+        loadStats(); loadHistory();
+        isSpinning = false; btn.disabled = false; btn.textContent = '开始抽奖';
+      }, 4000);
+    } else {
+      LovePage.toast(r.message || '抽奖失败');
+      isSpinning = false; btn.disabled = false; btn.textContent = '开始抽奖';
+    }
+  } catch (e) {
+    LovePage.toast('抽奖失败，请重试');
+    isSpinning = false; btn.disabled = false; btn.textContent = '开始抽奖';
+  }
+}
+function showResult(result) {
+  const prize = result.prize || result;
+  document.getElementById('resultIcon').textContent = prize.icon || '🎁';
+  if (prize.prizeType === 'thanks') {
+    document.getElementById('resultTitle').textContent = '谢谢惠顾';
+    document.getElementById('resultMessage').textContent = '很遗憾，下次再来吧~';
+  } else {
+    document.getElementById('resultTitle').textContent = '恭喜中奖！';
+    document.getElementById('resultMessage').textContent = '你获得了 ' + (prize.name || '');
+  }
+  document.getElementById('resultModal').classList.add('show');
+}
+function closeResult(){ document.getElementById('resultModal').classList.remove('show'); }
+async function loadStats() {
+  try {
+    const r = await LovePage.api(`/api/lottery/stats/${userId}`);
+    if (r.code === 200 && r.data) {
+      const s = r.data;
+      document.getElementById('totalDraws').textContent = s.totalDraws || 0;
+      document.getElementById('totalWin').textContent = s.totalWin || 0;
+      const net = s.netProfit || 0;
+      const el = document.getElementById('netProfit');
+      el.textContent = (net >= 0 ? '+' : '') + net;
+      el.style.color = net >= 0 ? 'var(--ok)' : 'var(--danger)';
+    }
+  } catch (e) {}
+}
+async function loadHistory() {
+  const box = document.getElementById('historyList');
+  try {
+    const r = await LovePage.api(`/api/lottery/history/${userId}`);
+    const list = (r.code === 200 && (r.data?.list || r.data)) || [];
+    const arr = Array.isArray(list) ? list : [];
+    if (!arr.length) { box.innerHTML = '<div class="lp-empty"><div class="ico">📝</div><p>暂无抽奖记录</p></div>'; return; }
+    box.innerHTML = arr.slice(0,30).map(rec => {
+      const time = (rec.createdAt || rec.createTime || '').toString().slice(0,16).replace('T',' ');
+      return `<div class="lp-item"><div class="row"><span class="title">${LovePage.escapeHtml(rec.prizeName||'奖品')}</span><span style="color:var(--rose);font-weight:700">-${rec.costCoins||0}</span></div><div class="meta">${LovePage.escapeHtml(time)}</div></div>`;
+    }).join('');
+  } catch (e) { box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>'; }
+}
+window.__afterAuth = async () => { await loadPrizes(); await loadStats(); await loadHistory(); };
+
+</script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FCE8EE">
+<title>家庭待办 · Love</title>
+<link rel="stylesheet" href="/css/love.css">
+
+<style>
+
+</style>
+</head>
+<body>
+<div class="app subpage">
+  <header class="sub-header">
+    <button type="button" class="back-btn" onclick="LovePage.back()" aria-label="返回">‹</button>
+    <div class="sub-title">家庭待办</div>
+    
+  </header>
+  <main class="sub-body">
+
+<div class="lp-hero"><div class="emoji">✅</div><div class="desc">一起完成的小事也浪漫</div></div>
+<div class="lp-chips" id="todoFilters">
+  <button class="lp-chip active" data-f="all" type="button" onclick="filterByStatus('all')">全部</button>
+  <button class="lp-chip" data-f="pending" type="button" onclick="filterByStatus('pending')">待完成</button>
+  <button class="lp-chip" data-f="done" type="button" onclick="filterByStatus('done')">已完成</button>
+</div>
+<div style="margin-bottom:12px"><button class="lp-btn block" type="button" onclick="showAddModal()">＋ 新建待办</button></div>
+<div id="todoList" class="lp-list"><div class="lp-empty"><div class="ico">⏳</div><p>加载中…</p></div></div>
+
+<div class="lp-modal-mask" id="todoModal" onclick="if(event.target===this)closeModal()">
+  <div class="lp-modal" onclick="event.stopPropagation()">
+    <div class="handle"></div>
+    <div class="hd"><span id="todoModalTitle">新建待办</span><button class="x" type="button" onclick="closeModal()">×</button></div>
+    <input type="hidden" id="todoId">
+    <div class="lp-field"><label>内容</label><input id="todoTitle" placeholder="要做什么？"></div>
+    <div class="lp-field"><label>优先级</label>
+      <select id="todoPriority">
+        <option value="LOW">低</option>
+        <option value="MEDIUM" selected>中</option>
+        <option value="HIGH">高</option>
+      </select>
+    </div>
+    <div class="lp-field"><label>截止日期</label><input id="todoDue" type="date"></div>
+    <div class="lp-field"><label>备注</label><textarea id="todoRemark" placeholder="可选"></textarea></div>
+    <button class="lp-btn block" type="button" onclick="saveTodo()">保存</button>
+  </div>
+</div>
+
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/love-page.js"></script>
+
+<script>
+
+let userId = null;
+(async function () {
+  const u = await LovePage.ready({ chefOnly: false });
+  if (!u) return;
+  userId = LovePage.getUserId();
+  if (typeof window.__afterAuth === 'function') await window.__afterAuth();
+})();
+
+
+let currentFilter = 'all';
+let editingId = null;
+function todoStatusLabel(s) {
+  return ({ pending:'待完成', in_progress:'进行中', completed:'已完成', done:'已完成', CANCELLED:'已取消' })[s] || s || '';
+}
+function getPriorityText(p) {
+  return ({ LOW:'低', MEDIUM:'中', HIGH:'高', low:'低', medium:'中', high:'高' })[p] || '中';
+}
+function filterByStatus(f) {
+  currentFilter = f;
+  document.querySelectorAll('#todoFilters .lp-chip').forEach(c => c.classList.toggle('active', c.dataset.f === f));
+  loadTodos();
+}
+async function loadTodos() {
+  const box = document.getElementById('todoList');
+  try {
+    const url = currentFilter === 'all'
+      ? `/api/todo/list/${userId}`
+      : `/api/todo/list/${userId}/${currentFilter}`;
+    const r = await LovePage.api(url);
+    const list = (r.code === 200 && (r.data?.list || r.data)) || [];
+    const arr = Array.isArray(list) ? list : [];
+    if (!arr.length) {
+      box.innerHTML = '<div class="lp-empty"><div class="ico">✅</div><p>暂无待办</p></div>';
+      return;
+    }
+    box.innerHTML = arr.map(t => {
+      const id = t.id;
+      const title = t.title || t.content || '待办';
+      const done = t.status === 'done' || t.status === 'completed' || t.status === 'COMPLETED' || t.completed === true;
+      const pri = getPriorityText(t.priority);
+      const due = (t.dueDate || t.deadline || '').toString().slice(0,10);
+      return `<div class="lp-item" style="opacity:${done?0.6:1}">
+        <div class="row">
+          <div style="min-width:0">
+            <div class="title">${done?'✓ ':''}${LovePage.escapeHtml(title)}</div>
+            <div class="meta">${todoStatusLabel(t.status)} · 优先级 ${pri}${due ? ' · 截止 ' + LovePage.escapeHtml(due) : ''}${t.assignee ? ' · ' + LovePage.escapeHtml(t.assignee) : ''}</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+          ${done
+            ? `<button class="lp-btn sm ghost" type="button" onclick="reopenTodo(${id})">重新打开</button>`
+            : `<button class="lp-btn sm" type="button" onclick="completeTodo(${id})">完成</button>
+               <button class="lp-btn sm ghost" type="button" onclick="remindTodo(${id})">提醒</button>`}
+          <button class="lp-btn sm ghost" type="button" onclick='editTodo(${JSON.stringify({id,title,priority:t.priority||"MEDIUM",due,remark:t.remark||t.note||""})})'>编辑</button>
+          <button class="lp-btn sm danger" type="button" onclick="deleteTodo(${id})">删除</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>';
+  }
+}
+function showAddModal() {
+  editingId = null;
+  document.getElementById('todoModalTitle').textContent = '新建待办';
+  document.getElementById('todoId').value = '';
+  document.getElementById('todoTitle').value = '';
+  document.getElementById('todoPriority').value = 'MEDIUM';
+  document.getElementById('todoDue').value = '';
+  document.getElementById('todoRemark').value = '';
+  document.getElementById('todoModal').classList.add('show');
+}
+function editTodo(t) {
+  editingId = t.id;
+  document.getElementById('todoModalTitle').textContent = '编辑待办';
+  document.getElementById('todoTitle').value = t.title || '';
+  document.getElementById('todoPriority').value = (t.priority || 'MEDIUM').toUpperCase();
+  document.getElementById('todoDue').value = t.due || '';
+  document.getElementById('todoRemark').value = t.remark || '';
+  document.getElementById('todoModal').classList.add('show');
+}
+function closeModal(){ document.getElementById('todoModal').classList.remove('show'); }
+async function saveTodo() {
+  const title = document.getElementById('todoTitle').value.trim();
+  const priority = document.getElementById('todoPriority').value;
+  const dueDate = document.getElementById('todoDue').value;
+  const remark = document.getElementById('todoRemark').value.trim();
+  if (!title) { LovePage.toast('请填写内容'); return; }
+  const payload = { userId, title, description: remark || '', content: title, priority: (priority||'MEDIUM').toLowerCase(), dueDate: dueDate || null, remark };
+  const url = editingId ? '/api/todo/update' : '/api/todo/add';
+  if (editingId) payload.id = editingId;
+  try {
+    const r = await LovePage.api(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if (r.code === 200) { LovePage.toast('已保存'); closeModal(); loadTodos(); }
+    else LovePage.toast(r.message || '保存失败');
+  } catch (e) { LovePage.toast('网络错误'); }
+}
+async function completeTodo(id) {
+  try {
+    const r = await LovePage.api(`/api/todo/complete/${id}`, { method:'POST' });
+    if (r.code === 200) { LovePage.toast('已完成'); loadTodos(); } else LovePage.toast(r.message||'失败');
+  } catch(e){ LovePage.toast('网络错误'); }
+}
+async function reopenTodo(id) {
+  try {
+    const r = await LovePage.api(`/api/todo/reopen/${id}`, { method:'POST' });
+    if (r.code === 200) { LovePage.toast('已重新打开'); loadTodos(); } else LovePage.toast(r.message||'失败');
+  } catch(e){ LovePage.toast('网络错误'); }
+}
+async function remindTodo(id) {
+  try {
+    const r = await LovePage.api(`/api/todo/remind/${id}`, { method:'POST' });
+    LovePage.toast(r.code === 200 ? (r.message || '已提醒') : (r.message || '失败'));
+  } catch(e){ LovePage.toast('网络错误'); }
+}
+async function deleteTodo(id) {
+  if (!confirm('确定删除？')) return;
+  try {
+    const r = await LovePage.api(`/api/todo/delete/${id}`, { method: 'DELETE' });
+    if (r.code === 200) { LovePage.toast('已删除'); loadTodos(); } else LovePage.toast(r.message||'失败');
+  } catch(e){ LovePage.toast('网络错误'); }
+}
+window.__afterAuth = loadTodos;
+
+</script>
+</body>
+</html>

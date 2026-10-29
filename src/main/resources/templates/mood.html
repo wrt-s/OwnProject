@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FCE8EE">
+<title>记录心情 · Love</title>
+<link rel="stylesheet" href="/css/love.css">
+<style>
+.mood-pick { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin:12px 0 16px; }
+.mood-opt {
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  padding:10px 4px; border-radius:14px; border:1.5px solid var(--rose-line,#F3D5DC);
+  background:#fff; cursor:pointer; font-size:11px; font-weight:600; color:var(--text,#2C292A);
+  -webkit-tap-highlight-color:transparent;
+}
+.mood-opt .me { font-size:22px; line-height:1; }
+.mood-opt.active {
+  border-color: var(--rose,#E85A7A);
+  background: linear-gradient(135deg,#FFF7F9 0%,#FFE8EF 100%);
+  box-shadow: 0 2px 10px rgba(232,90,122,.18);
+}
+.mood-today-cards { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+.mood-card {
+  background:var(--card,#fff); border:1px solid var(--rose-line,#F3D5DC);
+  border-radius:16px; padding:12px; min-height:76px;
+}
+.mood-card .who { font-size:12px; color:var(--muted,#8a8586); font-weight:600; }
+.mood-card .emo { font-size:28px; margin:6px 0 2px; }
+.mood-card .lab { font-size:14px; font-weight:700; }
+.mood-card .note { font-size:12px; color:var(--text-2,#666); margin-top:4px; word-break:break-word; }
+.mood-card.empty .emo { opacity:.45; }
+.mood-who-tag {
+  display:inline-block; font-size:10px; font-weight:700; padding:2px 7px;
+  border-radius:999px; margin-right:6px; vertical-align:middle;
+}
+.mood-who-tag.me { background:#FFE8EF; color:var(--rose,#E85A7A); }
+.mood-who-tag.partner { background:#EEF2FF; color:#4F6BED; }
+
+</style>
+</head>
+<body>
+<div class="app subpage">
+  <header class="sub-header">
+    <button type="button" class="back-btn" onclick="LovePage.back()" aria-label="返回">‹</button>
+    <div class="sub-title">记录心情</div>
+  </header>
+  <main class="sub-body">
+    <div class="lp-hero"><div class="emoji">💭</div><div class="desc">今天过得怎么样？告诉对方一声</div></div>
+
+    <div class="mood-today-cards">
+      <div class="mood-card" id="cardSelf">
+        <div class="who">我的今日</div>
+        <div class="emo">💭</div>
+        <div class="lab">还没记录</div>
+        <div class="note"></div>
+      </div>
+      <div class="mood-card" id="cardPartner">
+        <div class="who">对方今日</div>
+        <div class="emo">💭</div>
+        <div class="lab">还没记录</div>
+        <div class="note"></div>
+      </div>
+    </div>
+
+
+
+    <div class="lp-field"><label>选择心情</label></div>
+    <div class="mood-pick" id="moodPick"></div>
+    <div class="lp-field">
+      <label>想说的话（可选）</label>
+      <input id="moodNote" maxlength="200" placeholder="一句话就好～">
+    </div>
+    <div style="margin:12px 0 18px">
+      <button class="lp-btn block" type="button" id="saveBtn" onclick="saveMood()">保存今日心情</button>
+    </div>
+
+    <div class="lp-field" style="margin-bottom:8px"><label>最近记录</label></div>
+    <div id="moodList" class="lp-list"><div class="lp-empty"><div class="ico">⏳</div><p>加载中…</p></div></div>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/love-page.js"></script>
+<script>
+const MOODS_FALLBACK = [
+  {code:'开心',emoji:'😄'},{code:'平静',emoji:'😌'},{code:'想你',emoji:'🥰'},
+  {code:'累了',emoji:'😮‍💨'},{code:'低落',emoji:'😢'},{code:'生气',emoji:'😠'},
+  {code:'想吃',emoji:'😋'},{code:'无聊',emoji:'😑'},{code:'焦虑',emoji:'😰'},{code:'睡意',emoji:'😴'}
+];
+let userId = null, selected = null, catalog = MOODS_FALLBACK, nicknames = {}, partnerNickname = '对方';
+
+function emojiOf(code) {
+  const m = catalog.find(x => x.code === code);
+  return m ? m.emoji : '💭';
+}
+function fillCard(el, whoLabel, row) {
+  if (!el) return;
+  el.querySelector('.who').textContent = whoLabel;
+  if (row && row.mood) {
+    el.classList.remove('empty');
+    el.querySelector('.emo').textContent = emojiOf(row.mood);
+    el.querySelector('.lab').textContent = row.mood;
+    el.querySelector('.note').textContent = row.note || '';
+  } else {
+    el.classList.add('empty');
+    el.querySelector('.emo').textContent = '💭';
+    el.querySelector('.lab').textContent = '还没记录';
+    el.querySelector('.note').textContent = '';
+  }
+}
+function renderPick() {
+  const box = document.getElementById('moodPick');
+  box.innerHTML = catalog.map(m =>
+    `<button type="button" class="mood-opt${selected===m.code?' active':''}" data-m="${LovePage.escapeHtml(m.code)}" onclick="pickMood(this.dataset.m)">
+      <span class="me">${m.emoji}</span><span>${LovePage.escapeHtml(m.label||m.code)}</span>
+    </button>`
+  ).join('');
+}
+function pickMood(code) {
+  selected = code;
+  renderPick();
+}
+
+async function loadToday() {
+  try {
+    const r = await LovePage.api('/api/mood/today');
+    if (r.code !== 200) throw new Error(r.message || 'fail');
+    const d = r.data || {};
+    if (Array.isArray(d.moods) && d.moods.length) catalog = d.moods;
+    partnerNickname = d.partnerNickname || '对方';
+    fillCard(document.getElementById('cardSelf'), '我的今日', d.self);
+    fillCard(document.getElementById('cardPartner'), partnerNickname + ' · 今日', d.partner);
+    if (d.self && d.self.mood) {
+      selected = d.self.mood;
+      if (d.self.note) document.getElementById('moodNote').value = d.self.note;
+    }
+    renderPick();
+  } catch (e) {
+    LovePage.toast('加载今日心情失败');
+    renderPick();
+  }
+}
+function formatDate(s) {
+  if (!s) return '';
+  if (Array.isArray(s) && s.length >= 3) {
+    return s[0] + '-' + String(s[1]).padStart(2,'0') + '-' + String(s[2]).padStart(2,'0');
+  }
+  return String(s).slice(0, 10);
+}
+async function loadList() {
+  const box = document.getElementById('moodList');
+  try {
+    const r = await LovePage.api('/api/mood/list?limit=40');
+    if (r.code !== 200) throw new Error(r.message || 'fail');
+    const list = Array.isArray(r.data) ? r.data : [];
+    nicknames = r.nicknames || {};
+    const selfId = r.selfUserId != null ? Number(r.selfUserId) : userId;
+    if (Array.isArray(r.moods) && r.moods.length) catalog = r.moods;
+    if (!list.length) {
+      box.innerHTML = '<div class="lp-empty"><div class="ico">💭</div><p>还没有心情记录</p></div>';
+      return;
+    }
+    box.innerHTML = list.map(row => {
+      const mine = Number(row.userId) === Number(selfId);
+      const name = nicknames[String(row.userId)] || (mine ? '我' : partnerNickname);
+      const tag = mine
+        ? '<span class="mood-who-tag me">我的</span>'
+        : '<span class="mood-who-tag partner">对方</span>';
+      const note = row.note ? `<div class="meta" style="margin-top:6px;color:var(--text-2)">${LovePage.escapeHtml(row.note)}</div>` : '';
+      const del = mine
+        ? `<button class="lp-btn sm danger" type="button" onclick="deleteMood(${row.id})">删除</button>`
+        : '';
+      return `<div class="lp-item">
+        <div class="row"><div style="min-width:0">
+          <div class="title">${tag}${emojiOf(row.mood)} ${LovePage.escapeHtml(row.mood)} · ${LovePage.escapeHtml(name)}</div>
+          <div class="meta">${LovePage.escapeHtml(formatDate(row.moodDate))}</div>
+          ${note}
+        </div></div>
+        ${del ? `<div style="margin-top:10px">${del}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<div class="lp-empty"><p>加载失败</p></div>';
+  }
+}
+async function saveMood() {
+  if (!selected) { LovePage.toast('先选一个心情吧'); return; }
+  const note = document.getElementById('moodNote').value.trim();
+  try {
+    const r = await LovePage.api('/api/mood/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mood: selected, note }) // never send userId / partnerUserId
+    });
+    if (r.code === 200) {
+      LovePage.toast(r.message || '已保存');
+      try { sessionStorage.setItem('love_mood_dirty', '1'); } catch (e) {}
+      await loadToday();
+      await loadList();
+      // brief pause then back so homepage pageshow / reload picks up chip
+      setTimeout(() => { try { LovePage.back(); } catch (e) { location.href = '/'; } }, 500);
+    } else LovePage.toast(r.message || '保存失败');
+  } catch (e) { LovePage.toast('网络错误'); }
+}
+async function deleteMood(id) {
+  if (!confirm('删除这条心情记录？')) return;
+  try {
+    const r = await LovePage.api('/api/mood/delete/' + id, { method: 'DELETE' });
+    if (r.code === 200) { LovePage.toast('已删除'); loadToday(); loadList(); }
+    else LovePage.toast(r.message || '失败');
+  } catch (e) { LovePage.toast('网络错误'); }
+}
+(async function () {
+  const u = await LovePage.ready({ chefOnly: false });
+  if (!u) return;
+  userId = LovePage.getUserId();
+  await loadToday();
+  await loadList();
+})();
+</script>
+</body>
+</html>

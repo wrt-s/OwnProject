@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#FCE8EE">
+    <title>登录 · Love</title>
+    <link rel="stylesheet" href="/css/love.css">
+    <style>
+      .login-page {
+        min-height: 100dvh;
+        max-width: 430px;
+        margin: 0 auto;
+        padding: calc(24px + env(safe-area-inset-top, 0px)) 22px 40px;
+        background: linear-gradient(180deg, #FCE8EE 0%, #F7F4F5 42%, #F7F4F5 100%);
+        display: flex;
+        flex-direction: column;
+      }
+      .login-hero { text-align: center; padding: 36px 0 28px; }
+      .login-logo {
+        width: 72px; height: 72px; margin: 0 auto 14px;
+        border-radius: 22px;
+        background: linear-gradient(135deg, #F8B4C4, #E85A7A);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 36px;
+        box-shadow: 0 8px 24px rgba(232, 90, 122, 0.3);
+      }
+      .login-hero h1 { font-size: 26px; font-weight: 750; color: #2C292A; }
+      .login-hero p { font-size: 13px; color: #9A9295; margin-top: 8px; }
+      .login-card {
+        background: #fff;
+        border-radius: 20px;
+        padding: 22px 18px;
+        box-shadow: 0 2px 12px rgba(44,41,42,0.06);
+        border: 1px solid #F3D5DC;
+      }
+      .login-field { margin-bottom: 14px; }
+      .login-field label {
+        display: block; font-size: 12px; font-weight: 700;
+        color: #9A9295; margin-bottom: 6px; letter-spacing: 0.04em;
+      }
+      .login-field input {
+        width: 100%;
+        border: 1px solid #F3D5DC;
+        border-radius: 14px;
+        padding: 12px 14px;
+        font-size: 15px;
+        outline: none;
+        background: #FAFAFA;
+      }
+      .login-field input:focus { border-color: #F8B4C4; background: #fff; }
+      .login-btn {
+        width: 100%; margin-top: 8px;
+        border: none; border-radius: 999px;
+        padding: 13px 0;
+        background: #E85A7A; color: #fff;
+        font-size: 15px; font-weight: 750;
+        box-shadow: 0 4px 14px rgba(232, 90, 122, 0.32);
+        cursor: pointer;
+      }
+      .login-btn:disabled { opacity: 0.5; }
+      .login-remember {
+        display: flex; align-items: center; gap: 8px;
+        margin: 4px 0 2px; font-size: 13px; color: #6B6466;
+        user-select: none; cursor: pointer;
+      }
+      .login-remember input {
+        width: 16px; height: 16px; accent-color: #E85A7A; cursor: pointer;
+      }
+      .role-tips {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+        margin-top: 18px;
+      }
+      .role-tip {
+        background: #fff; border-radius: 14px; padding: 12px;
+        border: 1px solid #F3D5DC; text-align: center;
+      }
+      .role-tip .t { font-size: 13px; font-weight: 700; }
+      .role-tip .d { font-size: 11px; color: #9A9295; margin-top: 4px; }
+    </style>
+</head>
+<body>
+<div class="login-page">
+  <div class="login-hero">
+    <div class="login-logo">💕</div>
+    <h1>Love</h1>
+    <p>情侣点单 · 登录后开启你们的小程序</p>
+  </div>
+
+  <div class="login-card">
+    <div class="login-field">
+      <label>手机号</label>
+      <input id="phone" type="tel" inputmode="numeric" maxlength="11" placeholder="请输入手机号" autocomplete="username">
+    </div>
+    <div class="login-field">
+      <label>密码</label>
+      <input id="password" type="password" placeholder="请输入密码" autocomplete="current-password"
+             onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <label class="login-remember">
+      <input type="checkbox" id="rememberMe" checked>
+      <span>记住登录（30天内免重复登录）</span>
+    </label>
+    <button class="login-btn" id="loginBtn" type="button" onclick="doLogin()">进入 Love</button>
+  </div>
+
+  <div class="role-tips">
+    <div class="role-tip">
+      <div class="t">🍜 点单方</div>
+      <div class="d">浏览 · 下单 · 玩法</div>
+    </div>
+    <div class="role-tip">
+      <div class="t">👨‍🍳 做餐方</div>
+      <div class="d">接单 · 出餐 · 管理</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+<script>
+function toast(msg, ms) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), ms || 2200);
+}
+
+async function doLogin() {
+  const phone = (document.getElementById('phone').value || '').trim();
+  const password = document.getElementById('password').value || '';
+  const rememberMe = !!(document.getElementById('rememberMe') && document.getElementById('rememberMe').checked);
+  if (!phone || !password) { toast('请输入手机号和密码'); return; }
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  btn.textContent = '登录中…';
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ phone, password, rememberMe })
+    });
+    const r = await res.json();
+    if (r.code === 200 && r.data) {
+      localStorage.setItem('love_user', JSON.stringify(r.data));
+      localStorage.setItem('love_user_id', String(r.data.id));
+      try {
+        localStorage.setItem('love_remember_flag', rememberMe ? '1' : '0');
+        if (rememberMe) localStorage.setItem('love_saved_phone', phone);
+        else localStorage.removeItem('love_saved_phone');
+      } catch (e) {}
+      toast('欢迎回来，' + (r.data.nickname || ''));
+      setTimeout(() => { location.href = '/'; }, 400);
+    } else {
+      toast(r.message || '登录失败');
+      btn.disabled = false;
+      btn.textContent = '进入 Love';
+    }
+  } catch (e) {
+    toast('网络错误，请确认服务已启动');
+    btn.disabled = false;
+    btn.textContent = '进入 Love';
+  }
+}
+
+(function prefillSavedLogin() {
+  try {
+    const phone = localStorage.getItem('love_saved_phone');
+    if (phone) document.getElementById('phone').value = phone;
+    const flag = localStorage.getItem('love_remember_flag');
+    const cb = document.getElementById('rememberMe');
+    if (cb && flag === '0') cb.checked = false;
+  } catch (e) {}
+})();
+
+// 已登录（Session 或 remember-me 恢复）则直接进首页
+(async function () {
+  try {
+    const r = await fetch('/api/auth/me', { credentials: 'same-origin' }).then(x => x.json());
+    if (r.code === 200 && r.data) {
+      localStorage.setItem('love_user', JSON.stringify(r.data));
+      location.replace('/');
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

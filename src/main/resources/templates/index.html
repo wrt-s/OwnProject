@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#FCE8EE">
+    <title>Love · 恋爱点单</title>
+    <link rel="stylesheet" href="/css/love.css?v=sysnotify2">
+</head>
+<body>
+<div class="app">
+    <header class="app-header">
+        <div class="brand">
+            <div class="brand-mark" aria-hidden="true">💕</div>
+            <div class="brand-text">
+                <div class="brand-name" id="headerTitle">Love</div>
+                <div class="brand-sub" id="headerSub">点一份爱意给 TA</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <a class="anni-chip header-anni-chip" id="anniHomeCard" href="/anniversaries" aria-label="最近纪念日">
+                <span class="ah-ico" id="anniHomeIco" aria-hidden="true">📅</span>
+                <span class="ah-text">
+                    <span class="ah-title" id="anniHomeTitle">加载中…</span>
+                    <span class="ah-meta" id="anniHomeMeta"></span>
+                </span>
+            </a>
+            <a class="mood-twins" id="moodHomeCard" href="/mood" aria-label="今日心情 · 左点单方 · 右做餐方">
+                <span class="mood-twin" id="moodTwinOrderer" data-role="ORDERER" title="点单方">
+                    <span class="mood-twin-ico empty" id="moodTwinOrdererIco" aria-hidden="true">·</span>
+                </span>
+                <span class="mood-twin" id="moodTwinChef" data-role="CHEF" title="做餐方">
+                    <span class="mood-twin-ico empty" id="moodTwinChefIco" aria-hidden="true">·</span>
+                </span>
+            </a>
+            <button class="coin-chip header-coin-chip" type="button" onclick="switchTab('mine')" title="爱心币">
+                💗 <span class="amt" data-coin>0</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="pages">
+        <!-- 点单 -->
+        <section class="page active" id="page-order" aria-label="点单">
+
+            <div class="ai-order-bar" id="aiOrderBar">
+                <span class="ai-ico" aria-hidden="true">✨</span>
+                <input id="aiOrderInput" type="text" maxlength="80"
+                       placeholder="点单 / 搜索菜品或标签 / 清空购物车 / 记备忘…"
+                       enterkeyhint="go"
+                       onkeydown="if(event.key==='Enter')aiOneSentenceOrder()">
+                <button type="button" id="aiOrderBtn" onclick="aiOneSentenceOrder()">确定</button>
+                <button type="button" id="surpriseBtn" class="surprise-btn" onclick="getSurprise()" title="智能推荐">智能推荐</button>
+            </div>
+            <div class="cat-scroll" id="catScroll"></div>
+            <div class="dish-list" id="dishList">
+                <div class="loading"><div class="spinner"></div><span>加载菜品中…</span></div>
+            </div>
+        </section>
+
+        <!-- 订单（主路径：下单后追踪） -->
+        <section class="page" id="page-orders" aria-label="订单">
+            <div class="page-head">
+                <h2 id="ordersTitle">我的订单</h2>
+                <span class="hint" id="orderCountHint"></span>
+            </div>
+            <div class="kitchen-bar chef-only" id="kitchenBar">
+                <button type="button" class="kitchen-chip active" data-kfilter="all" onclick="setKitchenFilter('all')">全部</button>
+                <button type="button" class="kitchen-chip" data-kfilter="pending" onclick="setKitchenFilter('pending')">待接单</button>
+                <button type="button" class="kitchen-chip" data-kfilter="cooking" onclick="setKitchenFilter('cooking')">制作中</button>
+                <button type="button" class="kitchen-chip" data-kfilter="ready" onclick="setKitchenFilter('ready')">待取餐</button>
+                <button type="button" class="kitchen-chip" data-kfilter="active" onclick="setKitchenFilter('active')">进行中</button>
+            </div>
+            <div id="orderList">
+                <div class="loading"><div class="spinner"></div><span>加载中…</span></div>
+            </div>
+        </section>
+
+        <!-- 玩法 -->
+        <section class="page" id="page-play" aria-label="玩法">
+            <div class="page-head">
+                <h2>玩法中心</h2>
+                <span class="hint">赚币 · 互动</span>
+            </div>
+            <div class="play-featured" onclick="getSurprise()" role="button" tabindex="0">
+                <div class="pf-ico">🎁</div>
+                <div>
+                    <div class="pf-title">惊喜点单</div>
+                    <div class="pf-desc">随机推荐一道菜，加入购物车</div>
+                </div>
+                <div class="pf-go">抽取</div>
+            </div>
+            <div class="play-grid">
+                <a class="play-card" href="/checkin">
+                    <div class="ico">📅</div>
+                    <div class="name">每日签到</div>
+                    <div class="desc">签到领爱心币</div>
+                </a>
+                <a class="play-card" href="/ai-chat">
+                    <div class="ico">🐰</div>
+                    <div class="name">和小布聊聊</div>
+                    <div class="desc">AI 闲聊助手</div>
+                </a>
+                <a class="play-card" href="/lottery">
+                    <div class="ico">🎡</div>
+                    <div class="name">转盘抽奖</div>
+                    <div class="desc">试试手气</div>
+                </a>
+                <a class="play-card" href="/betting">
+                    <div class="ico">🎲</div>
+                    <div class="name">幸运币押注</div>
+                    <div class="desc">小赌怡情</div>
+                </a>
+                <a class="play-card" href="/feeding-game">
+                    <div class="ico">🥄</div>
+                    <div class="name">喂食大作战</div>
+                    <div class="desc">互动小游戏</div>
+                </a>
+                <a class="play-card" href="/achievements">
+                    <div class="ico">🏆</div>
+                    <div class="name">成就系统</div>
+                    <div class="desc">解锁徽章</div>
+                </a>
+                <a class="play-card" href="/blindbox">
+                    <div class="ico">🎁</div>
+                    <div class="name">惊喜盲盒</div>
+                    <div class="desc">随机掉落菜品</div>
+                </a>
+                <a class="play-card" href="/favorites">
+                    <div class="ico">⭐</div>
+                    <div class="name">我的收藏</div>
+                    <div class="desc">常吃清单</div>
+                </a>
+
+                            <a class="play-card chef-only" href="/family-location">
+                    <div class="ico">📍</div>
+                    <div class="name">家人位置</div>
+                    <div class="desc">文字距离</div>
+                </a>
+</div>
+        </section>
+
+        <!-- 我的 -->
+        <section class="page" id="page-mine" aria-label="我的">
+            <div class="mine-hero">
+                <div class="avatar">💕</div>
+                <div class="uname" id="mineNickname">Love 用户</div>
+                <div class="role-badge orderer" id="mineRoleBadge">🍜 点单方</div>
+                <div class="ubal">💖 爱心币 <span data-coin>0</span></div>
+            </div>
+
+            <div class="mine-group">
+                <div class="mine-group-title">生活</div>
+                <div class="mine-list">
+                    <a class="mine-item" href="/anniversaries">
+                        <span class="ico">💍</span><span class="label">纪念日</span><span class="arrow">›</span>
+                    </a>
+                    <a class="mine-item" href="/todos">
+                        <span class="ico">✅</span><span class="label">家庭待办</span><span class="arrow">›</span>
+                    </a>
+                    <a class="mine-item" href="/notebook">
+                        <span class="ico">📔</span><span class="label">记事本</span><span class="arrow">›</span>
+                    </a>
+                    <a class="mine-item" href="/mood">
+                        <span class="ico">💭</span><span class="label">记录心情</span><span class="arrow">›</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="mine-group">
+                <div class="mine-group-title">账户</div>
+                <div class="mine-list">
+                    <a class="mine-item" href="/coin-management">
+                        <span class="ico">💖</span><span class="label">爱心币</span><span class="arrow">›</span>
+                    </a>
+                    <a class="mine-item" href="/favorites">
+                        <span class="ico">⭐</span><span class="label">我的收藏</span><span class="arrow">›</span>
+                    </a>
+                    </div>
+            </div>
+
+            <div class="mine-group chef-only" id="partnerOnlineGroup">
+                <div class="mine-group-title">点单方状态</div>
+                <div class="lp-card" id="partnerOnlineCard" style="margin:0 0 8px;padding:14px 16px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span id="partnerOnlineDot" style="width:10px;height:10px;border-radius:50%;background:#bbb;display:inline-block;flex-shrink:0"></span>
+                        <div style="flex:1;min-width:0">
+                            <div style="font-weight:700" id="partnerOnlineName">点单方</div>
+                            <div class="meta" style="font-size:12px;color:var(--muted)" id="partnerOnlineMeta">加载中…</div>
+                        </div>
+                        <button type="button" class="lp-btn sm" onclick="loadPartnerOnline()" style="flex-shrink:0">刷新</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mine-group" id="mineDishAdminGroup">
+                <div class="mine-group-title">菜单管理</div>
+                <div class="mine-list">
+                    <a class="mine-item" href="/admin">
+                        <span class="ico">⚙️</span><span class="label">菜品管理</span><span class="arrow">›</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="mine-group chef-only" id="mineAdminGroup">
+                <div class="mine-group-title">做餐方</div>
+                <div class="mine-list">
+                    <a class="mine-item" href="javascript:void(0)" onclick="switchTab('orders')">
+                        <span class="ico">👨‍🍳</span><span class="label">厨房接单</span><span class="arrow">›</span>
+                    </a>
+                    <a class="mine-item" href="/dashboard">
+                        <span class="ico">📊</span><span class="label">数据看板</span><span class="arrow">›</span>
+                    </a>
+                    
+                    <a class="mine-item" href="/family-location">
+                        <span class="ico">📍</span><span class="label">家人位置</span><span class="arrow">›</span>
+                    </a>
+<a class="mine-item" href="/order-history">
+                        <span class="ico">📜</span><span class="label">历史订单</span><span class="arrow">›</span>
+                    </a>
+                </div>
+            </div>
+
+            <button type="button" class="logout-btn" onclick="doLogout()">退出登录</button>
+        </section>
+    </div>
+
+    <!-- Cart FAB：仅点单页显示 -->
+    <button class="cart-fab" id="cartFab" type="button" onclick="showCart()" aria-label="打开购物车">
+        <span class="cart-ico">🛒</span>
+        <span class="cart-label" id="cartFabLabel">购物车</span>
+        <span class="badge cart-badge-num">0</span>
+    </button>
+
+    <nav class="tab-bar" aria-label="主导航">
+        <button class="tab-item active" data-tab="order" type="button">
+            <span class="ico">🍜</span><span>点单</span>
+        </button>
+        <button class="tab-item" data-tab="orders" type="button">
+            <span class="ico">📋</span><span>订单</span>
+            <span class="tab-badge" id="ordersTabBadge" hidden aria-hidden="true"></span>
+        </button>
+        <button class="tab-item" data-tab="play" type="button">
+            <span class="ico">✨</span><span>玩法</span>
+        </button>
+        <button class="tab-item" data-tab="mine" type="button">
+            <span class="ico">👤</span><span>我的</span>
+        </button>
+    </nav>
+</div>
+
+<!-- Cart sheet -->
+<div class="modal-mask" id="cartModal" onclick="closeCart(event)">
+    <div class="modal-sheet" onclick="event.stopPropagation()" role="dialog" aria-label="购物车">
+        <div class="handle" aria-hidden="true"></div>
+        <div class="modal-hd">
+            <span>购物车</span>
+            <button class="modal-close" type="button" onclick="hideCart()" aria-label="关闭">×</button>
+        </div>
+        <div class="modal-bd" id="cartBody"></div>
+        <div class="modal-remark-wrap">
+            <input id="orderRemark" type="text" placeholder="整单备注（可选，如：晚点送）" maxlength="100">
+        </div>
+        <div class="modal-ft">
+            <div class="total-block">
+                <div class="total-label">合计</div>
+                <div class="total-amt" id="cartTotal">0 爱心币</div>
+            </div>
+            <button class="btn btn-ghost" type="button" onclick="clearCart()">清空</button>
+            <button class="btn-submit" id="submitBtn" type="button" onclick="submitOrder()" disabled>提交订单</button>
+        </div>
+    </div>
+</div>
+
+<!-- Order detail sheet -->
+<div class="modal-mask" id="detailModal" onclick="closeDetail(event)">
+    <div class="modal-sheet" onclick="event.stopPropagation()" role="dialog" aria-label="订单详情">
+        <div class="handle" aria-hidden="true"></div>
+        <div class="modal-hd">
+            <span>订单详情</span>
+            <button class="modal-close" type="button" onclick="hideDetail()" aria-label="关闭">×</button>
+        </div>
+        <div class="modal-bd" id="detailBody"></div>
+        <div class="modal-ft" id="detailFooter" style="justify-content:flex-end"></div>
+    </div>
+</div>
+
+<!-- Confirm -->
+<div class="confirm-mask" id="confirmMask">
+    <div class="confirm-box">
+        <div class="confirm-msg" id="confirmMsg"></div>
+        <div class="confirm-sub" id="confirmSub"></div>
+        <div class="confirm-actions">
+            <button type="button" class="cancel-btn" id="confirmCancel">取消</button>
+            <button type="button" class="ok-btn" id="confirmOk">确定</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/love-app-notify.js?v=nonotify1"></script>
+<script src="/js/love.js?v=nonotify1"></script>
+</body>
+</html>

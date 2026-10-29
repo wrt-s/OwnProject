@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FCE8EE">
+<title>喂食大作战 · Love</title>
+<link rel="stylesheet" href="/css/love.css">
+
+<style>
+
+.game-stage{position:relative;height:280px;border-radius:18px;overflow:hidden;background:linear-gradient(180deg,#FFF1F4,#FCE8EE 60%,#F7F4F5);border:1px solid var(--rose-line);margin-bottom:12px}
+.mouth{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);font-size:56px;transition:transform .12s}
+.mouth.eat{transform:translateX(-50%) scale(1.15)}
+.food{position:absolute;font-size:28px;cursor:pointer;user-select:none;animation:fall linear forwards;touch-action:manipulation}
+@keyframes fall{from{transform:translateY(-20px)}to{transform:translateY(260px)}}
+.score-pop{position:absolute;font-weight:800;color:var(--rose);pointer-events:none;animation:pop .8s ease forwards}
+@keyframes pop{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-40px)}}
+
+</style>
+</head>
+<body>
+<div class="app subpage">
+  <header class="sub-header">
+    <button type="button" class="back-btn" onclick="LovePage.back()" aria-label="返回">‹</button>
+    <div class="sub-title">喂食大作战</div>
+  </header>
+  <main class="sub-body">
+
+<div class="lp-hero"><div class="emoji">🥄</div><div class="desc">点掉落下的食物得分</div></div>
+<div class="lp-stats">
+  <div class="lp-stat"><div class="ico">⭐</div><div class="val" id="score">0</div><div class="lbl">得分</div></div>
+  <div class="lp-stat"><div class="ico">⏱</div><div class="val" id="timeLeft">30</div><div class="lbl">剩余秒</div></div>
+  <div class="lp-stat"><div class="ico">🍽</div><div class="val" id="eaten">0</div><div class="lbl">吃掉</div></div>
+</div>
+<div class="game-stage" id="stage"><div class="mouth" id="mouth">😋</div></div>
+<button class="lp-btn block" id="startBtn" type="button" onclick="startGame()">开始游戏</button>
+<div class="lp-card" style="margin-top:12px"><h3>最近成绩</h3>
+  <div id="historyList" class="lp-list"><div class="lp-empty"><div class="ico">⏳</div><p>加载中…</p></div></div>
+</div>
+<div class="lp-modal-mask" id="endModal" onclick="if(event.target===this)closeModal()">
+  <div class="lp-modal" onclick="event.stopPropagation()">
+    <div class="handle"></div>
+    <div style="text-align:center;padding:8px 0 12px">
+      <div style="font-size:40px">🎉</div>
+      <div style="font-size:18px;font-weight:800;margin:8px 0">本局结束</div>
+      <div id="endMsg" style="color:var(--muted);font-size:13px"></div>
+    </div>
+    <button class="lp-btn block" type="button" onclick="closeModal();startGame()">再来一局</button>
+    <button class="lp-btn block ghost" type="button" style="margin-top:8px" onclick="closeModal()">关闭</button>
+  </div>
+</div>
+
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/love-page.js"></script>
+
+<script>
+let userId = null;
+(async function () {
+  const u = await LovePage.ready({ chefOnly: false });
+  if (!u) return;
+  userId = LovePage.getUserId();
+  if (typeof window.__afterAuth === 'function') await window.__afterAuth();
+})();
+
+
+const FOODS = ['🍓','🍰','🍩','🥟','🍜','🍙','🍪','🍎','🍇','🍦'];
+let score=0, eaten=0, timeLeft=30, timer=null, spawnTimer=null, running=false;
+function updateDisplay(){
+  document.getElementById('score').textContent=score;
+  document.getElementById('timeLeft').textContent=timeLeft;
+  document.getElementById('eaten').textContent=eaten;
+}
+function startGame(){
+  if(running) return;
+  running=true; score=0; eaten=0; timeLeft=30; updateDisplay();
+  document.getElementById('startBtn').disabled=true;
+  document.getElementById('startBtn').textContent='进行中…';
+  const stage=document.getElementById('stage');
+  stage.querySelectorAll('.food,.score-pop').forEach(n=>n.remove());
+  timer=setInterval(()=>{ timeLeft--; updateDisplay(); if(timeLeft<=0) endGame(); },1000);
+  spawnTimer=setInterval(spawnFood,650);
+}
+function spawnFood(){
+  if(!running) return;
+  const stage=document.getElementById('stage');
+  const el=document.createElement('div');
+  el.className='food';
+  el.textContent=FOODS[Math.floor(Math.random()*FOODS.length)];
+  el.style.left=(10+Math.random()*75)+'%';
+  el.style.animationDuration=(1.6+Math.random()*1.4)+'s';
+  el.onclick=()=>eatFood(el);
+  stage.appendChild(el);
+  setTimeout(()=>{ if(el.parentNode) el.remove(); },3200);
+}
+function eatFood(el){
+  if(!running||!el.parentNode) return;
+  const pts=10+Math.floor(Math.random()*6);
+  score+=pts; eaten++; updateDisplay();
+  const pop=document.createElement('div');
+  pop.className='score-pop'; pop.textContent='+'+pts; pop.style.left=el.style.left; pop.style.top='40%';
+  document.getElementById('stage').appendChild(pop);
+  setTimeout(()=>pop.remove(),800);
+  const mouth=document.getElementById('mouth');
+  mouth.classList.add('eat'); setTimeout(()=>mouth.classList.remove('eat'),120);
+  el.remove();
+}
+async function endGame(){
+  running=false; clearInterval(timer); clearInterval(spawnTimer);
+  document.getElementById('startBtn').disabled=false;
+  document.getElementById('startBtn').textContent='开始游戏';
+  let effect='';
+  if(score>=200) effect=' · 解锁：超级大胃王';
+  else if(score>=120) effect=' · 解锁：干饭达人';
+  else if(score>=60) effect=' · 解锁：小吃货';
+  document.getElementById('endMsg').textContent=`得分 ${score} · 吃掉 ${eaten}`+effect;
+  document.getElementById('endModal').classList.add('show');
+  try{
+    await LovePage.api('/api/feeding-game/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId,score,eaten,foodCount:eaten,darkFoodCount:0,duration:30})});
+  }catch(e){}
+  await loadHistory();
+}
+function closeModal(){ document.getElementById('endModal').classList.remove('show'); }
+async function loadHistory(){
+  const box=document.getElementById('historyList');
+  try{
+    const r=await LovePage.api(`/api/feeding-game/history/${userId}?limit=10`);
+    const list=(r.code===200&&(r.data?.list||r.data))||[];
+    const arr=Array.isArray(list)?list:[];
+    if(!arr.length){ box.innerHTML='<div class="lp-empty"><div class="ico">📝</div><p>暂无成绩</p></div>'; return; }
+    box.innerHTML=arr.map(h=>{
+      const time=(h.createTime||h.createdAt||'').toString().slice(0,16).replace('T',' ');
+      return `<div class="lp-item"><div class="row"><span class="title">得分 ${h.score??0}</span><span class="meta">${LovePage.escapeHtml(time)}</span></div><div class="meta">吃掉 ${h.eaten??h.foodCount??'-'}</div></div>`;
+    }).join('');
+  }catch(e){ box.innerHTML='<div class="lp-empty"><p>加载失败</p></div>'; }
+}
+window.__afterAuth=loadHistory;
+
+</script>
+</body>
+</html>

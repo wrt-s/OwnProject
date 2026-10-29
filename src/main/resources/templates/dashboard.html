@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FCE8EE">
+<title>数据看板 · Love</title>
+<link rel="stylesheet" href="/css/love.css">
+
+<style>
+.mood-week { margin: 4px 0 8px; }
+.mood-week-head {
+  display:grid; grid-template-columns:42px 1fr 1fr; gap:6px;
+  font-size:11px; font-weight:700; color:var(--muted,#8a8586);
+  padding:0 2px 6px; text-align:center;
+}
+.mood-week-head .side-l { color:var(--rose,#E85A7A); }
+.mood-week-head .side-r { color:#4F6BED; }
+.mood-week-grid { display:flex; flex-direction:column; gap:6px; }
+.mood-week-row {
+  display:grid; grid-template-columns:42px 1fr 1fr; gap:6px; align-items:center;
+}
+.mood-week-row .wd {
+  font-size:12px; font-weight:700; color:var(--text-2,#666); text-align:center;
+}
+.mood-week-cell {
+  display:flex; align-items:center; justify-content:center;
+  min-height:40px; border-radius:12px; background:#fff;
+  border:1px solid var(--rose-line,#F3D5DC); font-size:20px;
+}
+.mood-week-cell.empty .dot {
+  width:8px; height:8px; border-radius:50%;
+  background:#E8E0E3; opacity:.85; display:inline-block;
+}
+.mood-week-cell.today { box-shadow: 0 0 0 1.5px rgba(232,90,122,.35); }
+.mood-trend {
+  margin: 10px 0 0; padding:12px 14px; border-radius:14px;
+  background:linear-gradient(135deg,#FFF7F9 0%,#F5F7FF 100%);
+  border:1px solid var(--rose-line,#F3D5DC);
+  font-size:13px; line-height:1.5; color:var(--text,#2C292A);
+}
+.mood-trend .tit { font-size:12px; font-weight:700; color:var(--muted); margin-bottom:4px; }
+.mood-trend .bars { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+.mood-trend .bar-card {
+  background:#fff; border-radius:10px; padding:8px 10px; border:1px solid #f0e4e8;
+  font-size:12px;
+}
+.mood-trend .bar-card b { color:var(--rose,#E85A7A); }
+</style>
+</head>
+<body>
+<div class="app subpage">
+  <header class="sub-header">
+    <button type="button" class="back-btn" onclick="LovePage.back()" aria-label="返回">‹</button>
+    <div class="sub-title">数据看板</div>
+  </header>
+  <main class="sub-body">
+<div class="lp-hero"><div class="emoji">📊</div><div class="desc">订单数据分析</div></div>
+<div class="lp-card" id="partnerOnlineCard" style="margin-bottom:12px">
+  <h3 style="margin:0 0 10px">💚 点单方在线状态</h3>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span id="partnerOnlineDot" style="width:10px;height:10px;border-radius:50%;background:#bbb;display:inline-block"></span>
+    <div style="flex:1">
+      <div style="font-weight:700" id="partnerOnlineName">点单方</div>
+      <div class="meta" style="font-size:12px;color:var(--muted)" id="partnerOnlineMeta">加载中…</div>
+    </div>
+    <button type="button" class="lp-btn sm" onclick="LovePage.loadPartnerOnline()">刷新</button>
+  </div>
+</div>
+
+<div class="lp-card" id="moodWeekCard" style="margin-bottom:12px">
+  <h3 style="margin:0 0 10px">💭 本周心情 · 左点单方 · 右做餐方</h3>
+  <div class="mood-week" id="moodWeek">
+    <div class="mood-week-head">
+      <span></span><span class="side-l">点单方</span><span class="side-r">做餐方</span>
+    </div>
+    <div class="mood-week-grid" id="moodWeekGrid">
+      <div class="lp-empty" style="padding:12px"><p>加载中…</p></div>
+    </div>
+  </div>
+  <div class="mood-trend" id="moodTrend" hidden>
+    <div class="tit">近 7 天小趋势</div>
+    <div class="sum" id="moodTrendSum"></div>
+    <div class="bars" id="moodTrendBars"></div>
+  </div>
+</div>
+<div class="lp-stats" style="grid-template-columns:1fr 1fr">
+  <div class="lp-stat"><div class="lbl">总订单</div><div class="val" id="totalOrders">-</div></div>
+  <div class="lp-stat"><div class="lbl">总消费</div><div class="val" id="totalAmount">-</div></div>
+  <div class="lp-stat"><div class="lbl">均单</div><div class="val" id="averageAmount">-</div></div>
+  <div class="lp-stat"><div class="lbl">最大单</div><div class="val" id="maxAmount">-</div></div>
+</div>
+<div class="lp-card">
+  <h3>📈 订单量趋势</h3>
+  <div class="lp-chips">
+    <button class="lp-chip active" type="button" data-t="daily" onclick="changeTrendType('daily')">每日</button>
+    <button class="lp-chip" type="button" data-t="weekly" onclick="changeTrendType('weekly')">每周</button>
+    <button class="lp-chip" type="button" data-t="monthly" onclick="changeTrendType('monthly')">每月</button>
+  </div>
+  <canvas id="trendChart" height="180"></canvas>
+</div>
+<div class="lp-card">
+  <h3>🏆 热门菜品</h3>
+  <div id="popularDishesList" class="lp-list"><div class="lp-empty"><p>加载中…</p></div></div>
+</div>
+<div class="lp-card">
+  <h3>⏰ 最爱时间段</h3>
+  <div id="timeSlotGrid" class="lp-grid-2"></div>
+</div>
+<div class="lp-card">
+  <h3>💰 近 7 天消费</h3>
+  <canvas id="consumptionChart" height="180"></canvas>
+</div>
+</main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/love-page.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let userId = null;
+(async function () {
+  const u = await LovePage.ready({ chefOnly: true });
+  if (!u) return;
+  userId = LovePage.getUserId();
+  if (typeof window.__afterAuth === 'function') await window.__afterAuth();
+})();
+
+
+let trendType='daily', trendChart=null, consumptionChart=null;
+function changeTrendType(t){
+  trendType=t;
+  document.querySelectorAll('.lp-card .lp-chip').forEach(c=>c.classList.toggle('active', c.dataset.t===t));
+  loadOrderTrend();
+}
+async function loadConsumptionStats(){
+  try{
+    const r=await LovePage.api('/api/order/dashboard/consumption');
+    if(r.code===200&&r.data){
+      const d=r.data;
+      document.getElementById('totalOrders').textContent=d.totalOrders??d.orderCount??'-';
+      document.getElementById('totalAmount').textContent=d.totalAmount??d.sumAmount??'-';
+      document.getElementById('averageAmount').textContent=d.averageAmount??d.avgAmount??'-';
+      document.getElementById('maxAmount').textContent=d.maxAmount??'-';
+      renderConsumptionChart(d);
+    }
+  }catch(e){}
+}
+function renderConsumptionChart(d){
+  const labels=d.labels||d.dates||d.days||[];
+  const values=d.values||d.amounts||d.series||[];
+  const ctx=document.getElementById('consumptionChart');
+  if(!ctx||typeof Chart==='undefined') return;
+  if(consumptionChart) consumptionChart.destroy();
+  consumptionChart=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:'消费',data:values,backgroundColor:'rgba(232,90,122,.55)',borderRadius:8}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+}
+async function loadOrderTrend(){
+  try{
+    const r=await LovePage.api(`/api/order/dashboard/trend?type=${trendType}`);
+    if(r.code===200&&r.data) renderTrendChart(r.data);
+  }catch(e){}
+}
+function renderTrendChart(d){
+  const labels=d.labels||d.dates||[];
+  const values=d.values||d.counts||d.series||[];
+  const ctx=document.getElementById('trendChart');
+  if(!ctx||typeof Chart==='undefined') return;
+  if(trendChart) trendChart.destroy();
+  trendChart=new Chart(ctx,{type:'line',data:{labels,datasets:[{label:'订单量',data:values,borderColor:'#E85A7A',backgroundColor:'rgba(232,90,122,.15)',tension:.35,fill:true}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+}
+async function loadPopularDishes(){
+  const box=document.getElementById('popularDishesList');
+  try{
+    const r=await LovePage.api('/api/order/dashboard/popular-dishes?limit=10');
+    const list=(r.code===200&&(r.data?.list||r.data))||[];
+    const arr=Array.isArray(list)?list:[];
+    if(!arr.length){ box.innerHTML='<div class="lp-empty"><p>暂无数据</p></div>'; return; }
+    box.innerHTML=arr.map((d,i)=>`<div class="lp-item"><div class="row"><span class="title">${i+1}. ${LovePage.escapeHtml(d.dishName||d.name||'')}</span><span style="font-weight:700;color:var(--rose)">×${d.count??d.orderCount??0}</span></div></div>`).join('');
+  }catch(e){ box.innerHTML='<div class="lp-empty"><p>加载失败</p></div>'; }
+}
+async function loadTimeSlotAnalysis(){
+  const box=document.getElementById('timeSlotGrid');
+  try{
+    const r=await LovePage.api('/api/order/dashboard/time-slots');
+    if(r.code!==200||!r.data){ box.innerHTML='<div class="lp-empty" style="grid-column:1/-1"><p>暂无数据</p></div>'; return; }
+    const slots = r.data.timeSlots || r.data.list || r.data;
+    const names = {morning:'早晨 (6:00-12:00)', afternoon:'下午 (12:00-18:00)', evening:'晚上 (18:00-22:00)', night:'深夜 (22:00-6:00)'};
+    let arr=[];
+    if(Array.isArray(slots)){
+      arr = slots.map(s=>({label:s.slot||s.label||s.timeRange||'', count:s.count??s.orders??0}));
+    } else if (slots && typeof slots === 'object') {
+      arr = Object.keys(slots).map(k=>({label:names[k]||k, count:slots[k]||0}));
+    }
+    const fav = r.data.favoriteSlot ? '<div class="lp-stat" style="grid-column:1/-1"><div class="lbl">最爱时段</div><div class="val" style="font-size:16px">'+LovePage.escapeHtml(r.data.favoriteSlot)+'</div></div>' : '';
+    if(!arr.length){ box.innerHTML='<div class="lp-empty" style="grid-column:1/-1"><p>暂无数据</p></div>'; return; }
+    box.innerHTML = fav + arr.map(s=>'<div class="lp-stat"><div class="lbl">'+LovePage.escapeHtml(s.label)+'</div><div class="val" style="font-size:18px">'+(s.count??0)+'</div></div>').join('');
+  }catch(e){}
+}
+
+const MOODS_FALLBACK = [
+  {code:'开心',emoji:'😄'},{code:'平静',emoji:'😌'},{code:'想你',emoji:'🥰'},
+  {code:'累了',emoji:'😮‍💨'},{code:'低落',emoji:'😢'},{code:'生气',emoji:'😠'},
+  {code:'想吃',emoji:'😋'},{code:'无聊',emoji:'😑'},{code:'焦虑',emoji:'😰'},{code:'睡意',emoji:'😴'}
+];
+let moodCatalog = MOODS_FALLBACK;
+function moodEmojiOf(code) {
+  const m = moodCatalog.find(x => x.code === code);
+  return m ? m.emoji : '💭';
+}
+async function loadMoodWeek() {
+  const grid = document.getElementById('moodWeekGrid');
+  const trendEl = document.getElementById('moodTrend');
+  if (!grid) return;
+  try {
+    const r = await LovePage.api('/api/mood/week');
+    if (r.code !== 200) throw new Error(r.message || 'fail');
+    const d = r.data || {};
+    if (Array.isArray(d.moods) && d.moods.length) moodCatalog = d.moods;
+    const days = Array.isArray(d.days) ? d.days : [];
+    const todayStr = (d.to || '').toString();
+    if (!days.length) {
+      grid.innerHTML = '<div class="lp-empty" style="padding:12px"><p>暂无数据</p></div>';
+    } else {
+      grid.innerHTML = days.map(day => {
+        const isToday = String(day.date) === todayStr;
+        const left = day.orderer || {};
+        const right = day.chef || {};
+        const cell = (c, side) => {
+          const cls = 'mood-week-cell' + (isToday ? ' today' : '') + (c.recorded ? '' : ' empty');
+          const inner = c.recorded
+            ? LovePage.escapeHtml(c.emoji || moodEmojiOf(c.mood) || '💭')
+            : '<span class="dot" aria-hidden="true"></span>';
+          const title = c.recorded ? (c.mood + (c.note ? (' · ' + c.note) : '')) : (side + '未记录');
+          return '<div class="' + cls + '" title="' + LovePage.escapeHtml(title) + '">' + inner + '</div>';
+        };
+        return '<div class="mood-week-row">' +
+          '<div class="wd">' + LovePage.escapeHtml(day.label || '') + '</div>' +
+          cell(left, '点单方') + cell(right, '做餐方') +
+        '</div>';
+      }).join('');
+    }
+    const tr = d.trend || {};
+    const sum = tr.summary || '';
+    const sumEl = document.getElementById('moodTrendSum');
+    const barsEl = document.getElementById('moodTrendBars');
+    if (sumEl) sumEl.textContent = sum;
+    const o = tr.orderer || {};
+    const c = tr.chef || {};
+    if (barsEl) {
+      barsEl.innerHTML =
+        '<div class="bar-card">点单方<br>开心类 <b>' + (o.happy||0) + '</b> · 其他 ' + (o.other||0) +
+        (o.recorded ? '' : ' · 未记') + '</div>' +
+        '<div class="bar-card">做餐方<br>开心类 <b>' + (c.happy||0) + '</b> · 其他 ' + (c.other||0) +
+        (c.recorded ? '' : ' · 未记') + '</div>';
+    }
+    if (trendEl) trendEl.hidden = false;
+  } catch (e) {
+    grid.innerHTML = '<div class="lp-empty" style="padding:12px"><p>周历加载失败</p></div>';
+    if (trendEl) trendEl.hidden = true;
+  }
+}
+
+window.__afterAuth=async()=>{
+  try { await LovePage.loadPartnerOnline(); } catch(e) {}
+  await loadMoodWeek();
+  await loadConsumptionStats();
+  await loadOrderTrend();
+  await loadPopularDishes();
+  await loadTimeSlotAnalysis();
+};
+
+</script>
+</body>
+</html>
