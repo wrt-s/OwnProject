@@ -152,7 +152,7 @@ async function doLogin() {
         else localStorage.removeItem('love_saved_phone');
       } catch (e) {}
       toast('欢迎回来，' + (r.data.nickname || ''));
-      setTimeout(() => { location.href = '/'; }, 400);
+      setTimeout(() => { location.href = safeNextPath(); }, 400);
     } else {
       toast(r.message || '登录失败');
       btn.disabled = false;
@@ -163,6 +163,14 @@ async function doLogin() {
     btn.disabled = false;
     btn.textContent = '进入 Love';
   }
+}
+
+function safeNextPath() {
+  try {
+    const q = new URLSearchParams(location.search).get('redirect') || '';
+    if (q.startsWith('/') && !q.startsWith('//') && !q.includes('://') && !q.includes('\\')) return q;
+  } catch (e) {}
+  return '/';
 }
 
 (function prefillSavedLogin() {
@@ -181,7 +189,7 @@ async function doLogin() {
     const r = await fetch('/api/auth/me', { credentials: 'same-origin' }).then(x => x.json());
     if (r.code === 200 && r.data) {
       localStorage.setItem('love_user', JSON.stringify(r.data));
-      location.replace('/');
+      location.replace(safeNextPath());
     }
   } catch (e) {}
 })();

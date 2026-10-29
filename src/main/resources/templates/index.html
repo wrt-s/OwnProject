@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#FCE8EE">
     <title>Love · 恋爱点单</title>
-    <link rel="stylesheet" href="/css/love.css?v=sysnotify2">
+    <link rel="stylesheet" href="/css/love.css?v=qa-fixes1">
 </head>
 <body>
 <div class="app">
@@ -45,13 +45,20 @@
         <!-- 点单 -->
         <section class="page active" id="page-order" aria-label="点单">
 
+            <div class="search-bar" id="dishSearchBar">
+                <span class="search-ico" aria-hidden="true">🔍</span>
+                <input id="dishSearchInput" type="search" maxlength="40"
+                       placeholder="搜索菜品、描述或标签"
+                       enterkeyhint="search"
+                       oninput="doSearch(this.value)">
+            </div>
             <div class="ai-order-bar" id="aiOrderBar">
                 <span class="ai-ico" aria-hidden="true">✨</span>
                 <input id="aiOrderInput" type="text" maxlength="80"
-                       placeholder="点单 / 搜索菜品或标签 / 清空购物车 / 记备忘…"
+                       placeholder="一句话点单：来份蛋羹 / 清空购物车 / 记备忘"
                        enterkeyhint="go"
                        onkeydown="if(event.key==='Enter')aiOneSentenceOrder()">
-                <button type="button" id="aiOrderBtn" onclick="aiOneSentenceOrder()">确定</button>
+                <button type="button" id="aiOrderBtn" onclick="aiOneSentenceOrder()">点单</button>
                 <button type="button" id="surpriseBtn" class="surprise-btn" onclick="getSurprise()" title="智能推荐">智能推荐</button>
             </div>
             <div class="cat-scroll" id="catScroll"></div>
@@ -301,6 +308,6 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/js/love-app-notify.js?v=nonotify1"></script>
-<script src="/js/love.js?v=nonotify1"></script>
+<script src="/js/love.js?v=qa-fixes1"></script>
 </body>
 </html>

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#FCE8EE">
 <title>历史订单 · Love</title>
-<link rel="stylesheet" href="/css/love.css">
+<link rel="stylesheet" href="/css/love.css?v=qa-fixes1">
 
 <style></style>
 </head>
@@ -13,7 +13,7 @@
 <div class="app subpage">
   <header class="sub-header">
     <button type="button" class="back-btn" onclick="LovePage.back()" aria-label="返回">‹</button>
-    <div class="sub-title">历史订单</div>
+    <div class="sub-title" id="historyTitle">历史订单</div>
   </header>
   <main class="sub-body">
 <div class="lp-hero"><div class="emoji">📜</div><div class="desc">历史订单一览</div></div>
@@ -29,7 +29,7 @@
 </main>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script src="/js/love-page.js"></script>
+<script src="/js/love-page.js?v=qa-fixes1"></script>
 
 <script>
 let userId = null;
@@ -47,20 +47,27 @@ function normalizeStatus(s){ if(!s) return s; const k=String(s).trim().toLowerCa
 function statusLabel(s){ return STATUS_MAP[normalizeStatus(s)]||s; }
 async function loadOrderHistory(){
   const box=document.getElementById('orderList');
+  const chef=LovePage.isChef();
+  const title=document.getElementById('historyTitle');
+  if(title) title.textContent=chef?'厨房历史':'历史订单';
+  const hero=document.querySelector('.lp-hero .desc');
+  if(hero) hero.textContent=chef?'做过的厨房订单':'历史订单一览';
   try{
-    const r=await LovePage.api(`/api/order/user/${userId}`);
+    const r=chef
+      ? await LovePage.api('/api/order/list')
+      : await LovePage.api(`/api/order/user/${userId}`);
     const list=(r.code===200&&(r.data?.list||r.data))||[];
     const arr=Array.isArray(list)?list:[];
     if(!arr.length){ box.innerHTML='<div class="lp-empty"><div class="ico">📭</div><p>暂无订单</p></div>'; return; }
     box.innerHTML=arr.map(o=>{
       const st=statusLabel(o.status)||o.status||'未知';
       const stClass='status-pill status-'+(o.status||'');
-      const no=o.orderNo||o.id;
-      const amt=o.totalAmount??o.amount??0;
+      const no=o.orderNo||('#'+o.id);
+      const amt=LovePage.formatOrderPrice(o);
       const time=(o.createTime||o.createdAt||'').toString().slice(0,16).replace('T',' ');
       return `<div class="lp-item" onclick="viewOrderDetail(${o.id})">
-        <div class="row"><span class="title">${LovePage.escapeHtml(time || "订单")}</span><span class="${stClass}">${LovePage.escapeHtml(st)}</span></div>
-        <div class="meta">${LovePage.escapeHtml(time)} · 💖 ${amt}</div>
+        <div class="row"><span class="title">${LovePage.escapeHtml(String(no))}</span><span class="${stClass}">${LovePage.escapeHtml(st)}</span></div>
+        <div class="meta">${LovePage.escapeHtml(time)} · ${LovePage.escapeHtml(amt)}</div>
       </div>`;
     }).join('');
   }catch(e){ box.innerHTML='<div class="lp-empty"><p>加载失败</p></div>'; }
@@ -75,13 +82,14 @@ async function viewOrderDetail(orderId){
     const itemsHtml=items.map(it=>`<div class="meta" style="display:flex;justify-content:space-between;padding:6px 0"><span>${LovePage.escapeHtml(it.dishName||it.name||'')} ×${it.quantity||1}</span><span>${it.price??it.amount??''}</span></div>`).join('')||'<div class="meta">无明细</div>';
     document.getElementById('detailBody').innerHTML=`
       <div class="lp-card" style="margin:0;box-shadow:none;border:none;padding:0">
-        <div class="title">订单详情</div>
+        <div class="title">订单 ${LovePage.escapeHtml(String(o.orderNo||('#'+o.id)))}</div>
+        <div class="meta" style="margin:8px 0">订单号：${LovePage.escapeHtml(String(o.orderNo||'-'))}</div>
         <div class="meta" style="margin:8px 0">状态：${LovePage.escapeHtml(statusLabel(o.status)||o.status||'未知')}${o.userId!=null?' · 用户 #'+o.userId:''}</div>
         ${(function(){ const fr=o.completedAt||o.finishTime||o.finishedAt||(normalizeStatus(o.status)==='completed'?(o.updatedAt||o.updateTime):null); if(!fr) return ''; const t=String(fr).slice(0,19).replace('T',' '); return '<div class="meta">完成时间：'+LovePage.escapeHtml(t)+'</div>'; })()}
         <div class="meta">备注：${LovePage.escapeHtml(o.remark||'无')}</div>
         <hr style="border:none;border-top:1px dashed var(--rose-line);margin:10px 0">
         ${itemsHtml}
-        <div style="margin-top:10px;font-weight:800;color:var(--rose)">合计 💖 ${o.totalAmount??o.amount??0}</div>
+        <div style="margin-top:10px;font-weight:800;color:var(--rose)">合计 ${LovePage.escapeHtml(LovePage.formatOrderPrice(o))}</div>
       </div>`;
     const canCancel=normalizeStatus(o.status)==='pending';
     document.getElementById('detailFooter').innerHTML=canCancel

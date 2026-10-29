@@ -21,10 +21,17 @@
   position:absolute; inset:0; pointer-events:none;
 }
 .wheel-label {
-  position:absolute; left:50%; top:50%; width:50%;
-  transform-origin:0 0; text-align:center;
-  font-size:11px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.2);
-  padding-left:28%;
+  position:absolute; left:50%; top:0; width:64px; margin-left:-32px;
+  height:50%; padding-top:14px; box-sizing:border-box;
+  transform-origin:50% 100%; text-align:center;
+  font-size:11px; font-weight:700; line-height:1.15; color:#4a2430;
+  text-shadow:0 1px 0 rgba(255,255,255,.45);
+  overflow:hidden; pointer-events:none;
+}
+.wheel-label .wl-ico { display:block; font-size:15px; line-height:1.1; }
+.wheel-label .wl-name {
+  display:block; max-width:60px; margin:1px auto 0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .wheel-pointer {
   position:absolute; top:-8px; left:50%; transform:translateX(-50%);
@@ -112,12 +119,18 @@ async function loadPrizes() {
 }
 function renderWheel() {
   const labels = document.getElementById('wheelLabels');
+  const wheel = document.getElementById('wheel');
   if (!prizes.length) { labels.innerHTML = ''; return; }
   const seg = 360 / prizes.length;
+  const colors = ['#F8B4C4','#E85A7A','#FCE8EE','#FFD6E0','#D4456A','#FFF1F4','#F4A3B8','#C73B5A'];
+  if (wheel) {
+    const stops = prizes.map((_, i) => `${colors[i % colors.length]} ${i * seg}deg ${(i + 1) * seg}deg`).join(',');
+    wheel.style.background = `conic-gradient(${stops})`;
+  }
   labels.innerHTML = prizes.map((p, i) => {
     const rot = i * seg + seg / 2;
     const name = (p.prizeType === 'thanks') ? '谢谢' : (p.name || p.value || '');
-    return `<div class="wheel-label" style="transform:rotate(${rot}deg)">${LovePage.escapeHtml(String(p.icon||'🎁'))}<br>${LovePage.escapeHtml(String(name).slice(0,6))}</div>`;
+    return `<div class="wheel-label" style="transform:rotate(${rot}deg)"><span class="wl-ico">${LovePage.escapeHtml(String(p.icon||'🎁'))}</span><span class="wl-name">${LovePage.escapeHtml(String(name).slice(0,6))}</span></div>`;
   }).join('');
 }
 function renderPrizeList() {

@@ -29,7 +29,8 @@
 </div>
 
 <section class="admin-sec active" id="sec-dishes">
-  <div style="margin-bottom:12px"><button class="lp-btn block" type="button" onclick="openDishModal()">＋ 新增菜品</button></div>
+  <div class="chef-write" id="dishWriteBar" style="margin-bottom:12px"><button class="lp-btn block" type="button" onclick="openDishModal()">＋ 新增菜品</button></div>
+  <p id="dishReadOnlyHint" style="display:none;font-size:12px;color:var(--muted);margin:0 0 10px">点单方仅可浏览菜单，改菜请让做餐方操作</p>
   <div class="lp-field"><input id="dishFilter" type="search" placeholder="搜索菜品" oninput="renderDishes()"></div>
   <div id="dishList" class="lp-list"><div class="lp-empty"><p>加载中…</p></div></div>
 </section>
@@ -72,7 +73,14 @@
     <input type="hidden" id="dId">
     <div class="lp-field"><label>名称</label><input id="dName" placeholder="菜品名"></div>
     <div class="lp-field"><label>分类</label><select id="dCat"></select></div>
-    <div class="lp-field"><label>价格（爱心币）</label><input id="dPrice" type="number" min="0" value="10"></div>
+    <div class="lp-field"><label>价格</label><input id="dPrice" type="number" min="0" value="10"></div>
+    <div class="lp-field"><label>币种</label>
+      <select id="dPriceType">
+        <option value="爱心币">爱心币</option>
+        <option value="亲亲">亲亲</option>
+        <option value="抱抱">抱抱</option>
+      </select>
+    </div>
     <div class="lp-field"><label>描述</label><textarea id="dDesc" placeholder="简介"></textarea></div>
     <div class="lp-field"><label>标签（逗号分隔）</label><input id="dTags" placeholder="辣,家常"></div>
     <div class="lp-field"><label>图片 URL</label><input id="dImg" placeholder="可粘贴链接或下方上传" oninput="onDishImageUrlInput()"></div>
@@ -109,7 +117,7 @@
 </main>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script src="/js/love-page.js"></script>
+<script src="/js/love-page.js?v=qa-fixes1"></script>
 
 <script>
 let userId = null;
@@ -131,10 +139,14 @@ function applyAdminRoleUI(){
       t.style.display = chef ? '' : 'none';
     }
   });
+  document.querySelectorAll('.chef-write').forEach(el => {
+    el.style.display = chef ? '' : 'none';
+  });
+  const hint = document.getElementById('dishReadOnlyHint');
+  if (hint) hint.style.display = chef ? 'none' : 'block';
   if (!chef) {
     const title = document.querySelector('.sub-title');
-    if (title) title.textContent = '菜品管理';
-    // 确保落在菜品页
+    if (title) title.textContent = '菜品浏览';
     if (typeof switchAdmin === 'function') switchAdmin('dishes');
   }
 }
@@ -238,15 +250,15 @@ function renderDishes(){
     return `<div class="lp-item"><div class="dish-row">
       <div class="info">
         <div class="row"><span class="title">${LovePage.escapeHtml(d.name||'')}</span>${sold?'<span class="badge-sold">售罄</span>':'<span class="badge-on">在售</span>'}</div>
-        <div class="meta">${LovePage.escapeHtml(cat?((cat.icon||'')+cat.name):'未分类')} · 💖 ${d.price??0}</div>
+        <div class="meta">${LovePage.escapeHtml(cat?((cat.icon||'')+cat.name):'未分类')} · ${d.price??0} ${LovePage.escapeHtml(d.priceType||'爱心币')}</div>
         <div class="meta">${LovePage.escapeHtml(d.description||'')}</div>
       </div>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+    ${LovePage.isChef()?`<div class="chef-write" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
       <button class="lp-btn sm ghost" type="button" onclick="editDish(${d.id})">编辑</button>
       <button class="lp-btn sm" type="button" onclick="toggleSold(${d.id},${d.isSoldOut||0})">${sold?'上架':'下架'}</button>
       <button class="lp-btn sm danger" type="button" onclick="deleteDish(${d.id})">删除</button>
-    </div></div>`;
+    </div>`:''}</div>`;
   }).join('');
 }
 function openDishModal(){
@@ -255,6 +267,7 @@ function openDishModal(){
   document.getElementById('dId').value='';
   document.getElementById('dName').value='';
   document.getElementById('dPrice').value='10';
+  document.getElementById('dPriceType').value='爱心币';
   document.getElementById('dDesc').value='';
   document.getElementById('dTags').value='';
   clearDishImage(true);
@@ -271,6 +284,7 @@ function editDish(id){
   document.getElementById('dId').value=d.id;
   document.getElementById('dName').value=d.name||'';
   document.getElementById('dPrice').value=d.price??0;
+  document.getElementById('dPriceType').value=d.priceType||'爱心币';
   document.getElementById('dDesc').value=d.description||'';
   document.getElementById('dTags').value=d.tags||'';
   setDishImageUI(d.imageUrl||'', null);
@@ -283,15 +297,17 @@ function editDish(id){
 }
 function closeDishModal(){ document.getElementById('dishModal').classList.remove('show'); }
 async function saveDish(){
+  if(!LovePage.isChef()){ LovePage.toast('仅做餐方可修改菜品'); return; }
   const name=document.getElementById('dName').value.trim();
   const categoryId=Number(document.getElementById('dCat').value)||null;
   const price=Number(document.getElementById('dPrice').value)||0;
+  const priceType=document.getElementById('dPriceType').value||'爱心币';
   const description=document.getElementById('dDesc').value.trim();
   const tags=document.getElementById('dTags').value.trim();
   const imageUrl=document.getElementById('dImg').value.trim();
   if(!name){ LovePage.toast('请填写名称'); return; }
   const payload={
-    name, categoryId, price, priceType:'爱心币', description, tags,
+    name, categoryId, price, priceType, description, tags,
     // empty string must be sent so MyBatis can clear image_url (null is skipped by NOT_NULL strategy)
     imageUrl: imageUrl,
     isSignature: document.getElementById('dSig').checked?1:0,
@@ -306,10 +322,12 @@ async function saveDish(){
   else LovePage.toast(r.message||'保存失败');
 }
 async function toggleSold(id, current){
+  if(!LovePage.isChef()){ LovePage.toast('仅做餐方可修改菜品'); return; }
   const r=await LovePage.api('/api/dish/toggleSoldOut',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dishId:id, isSoldOut: current})});
   if(r.code===200){ LovePage.toast('已更新'); loadDishes(); } else LovePage.toast(r.message||'失败');
 }
 async function deleteDish(id){
+  if(!LovePage.isChef()){ LovePage.toast('仅做餐方可修改菜品'); return; }
   if(!confirm('确定删除该菜品？')) return;
   const r=await LovePage.api(`/api/dish/delete/${id}`,{method:'DELETE'});
   if(r.code===200){ LovePage.toast('已删除'); loadDishes(); } else LovePage.toast(r.message||'删除失败');
@@ -341,7 +359,7 @@ function renderOrders(){
     const time=(o.createTime||o.createdAt||'').toString().slice(0,16).replace('T',' ');
     return `<div class="lp-item">
       <div class="row"><span class="title">#${LovePage.escapeHtml(String(o.orderNo||o.id))}</span><span class="status-pill status-${LovePage.escapeHtml(String(ns||''))}">${LovePage.escapeHtml(st)}</span></div>
-      <div class="meta">${LovePage.escapeHtml(time)} · 用户 #${o.userId??'-'} · 💖 ${o.totalPrice??o.totalAmount??o.amount??0}</div>
+      <div class="meta">${LovePage.escapeHtml(time)} · 用户 #${o.userId??'-'} · ${LovePage.escapeHtml(LovePage.formatOrderPrice(o))}</div>
       <div class="meta">备注：${LovePage.escapeHtml(o.remark||'无')}</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${btns}</div>
     </div>`;

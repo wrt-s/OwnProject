@@ -114,7 +114,7 @@
 </main>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script src="/js/love-page.js"></script>
+<script src="/js/love-page.js?v=qa-fixes1"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 let userId = null;
@@ -145,9 +145,20 @@ async function loadConsumptionStats(){
     }
   }catch(e){}
 }
+function seriesFrom(d, rowsKey, valueKey){
+  let labels=d.labels||d.dates||d.days||[];
+  let values=d.values||d.amounts||d.counts||d.series||[];
+  const rows=d[rowsKey]||d.trend||d.dailyStats;
+  if((!labels.length||!values.length)&&Array.isArray(rows)){
+    labels=rows.map(x=>x.date||x.label||'');
+    values=rows.map(x=>x[valueKey]??x.count??x.amount??x.value??0);
+  }
+  return {labels, values};
+}
 function renderConsumptionChart(d){
-  const labels=d.labels||d.dates||d.days||[];
-  const values=d.values||d.amounts||d.series||[];
+  const s=seriesFrom(d,'dailyStats','amount');
+  const labels=s.labels;
+  const values=s.values;
   const ctx=document.getElementById('consumptionChart');
   if(!ctx||typeof Chart==='undefined') return;
   if(consumptionChart) consumptionChart.destroy();
@@ -160,8 +171,9 @@ async function loadOrderTrend(){
   }catch(e){}
 }
 function renderTrendChart(d){
-  const labels=d.labels||d.dates||[];
-  const values=d.values||d.counts||d.series||[];
+  const s=seriesFrom(d,'trend','count');
+  const labels=s.labels;
+  const values=s.values;
   const ctx=document.getElementById('trendChart');
   if(!ctx||typeof Chart==='undefined') return;
   if(trendChart) trendChart.destroy();
@@ -171,7 +183,8 @@ async function loadPopularDishes(){
   const box=document.getElementById('popularDishesList');
   try{
     const r=await LovePage.api('/api/order/dashboard/popular-dishes?limit=10');
-    const list=(r.code===200&&(r.data?.list||r.data))||[];
+    const raw=r.code===200?r.data:null;
+    const list=Array.isArray(raw)?raw:(raw&&(raw.dishes||raw.list))||[];
     const arr=Array.isArray(list)?list:[];
     if(!arr.length){ box.innerHTML='<div class="lp-empty"><p>暂无数据</p></div>'; return; }
     box.innerHTML=arr.map((d,i)=>`<div class="lp-item"><div class="row"><span class="title">${i+1}. ${LovePage.escapeHtml(d.dishName||d.name||'')}</span><span style="font-weight:700;color:var(--rose)">×${d.count??d.orderCount??0}</span></div></div>`).join('');

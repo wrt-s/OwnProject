@@ -96,8 +96,7 @@ function paintCartBadge() {
   const label = document.getElementById('cartFabLabel');
   if (label) {
     if (n > 0) {
-      const t = cartTotal();
-      label.textContent = t.total + ' ' + t.pt;
+      label.textContent = formatCartTotals();
     } else {
       label.textContent = '购物车';
     }
@@ -197,8 +196,13 @@ function handleHomeQueryParams() {
   try {
     const qs = new URLSearchParams(location.search || '');
     const denied = qs.get('denied');
-    if (denied === 'chef') {
-      toast('仅做餐方可访问家人位置');
+    if (denied === 'chef' || denied === 'dashboard' || denied === 'location') {
+      const deniedText = {
+        dashboard: '仅做餐方可查看数据看板',
+        location: '仅做餐方可查看家人位置',
+        chef: '仅做餐方可访问该页面'
+      };
+      toast(deniedText[denied] || '仅做餐方可访问该页面');
       qs.delete('denied');
       const next = qs.toString();
       const url = location.pathname + (next ? ('?' + next) : '') + (location.hash || '');
@@ -692,8 +696,10 @@ function renderCategories() {
 
 function selectCategory(id) {
   currentCategoryId = id;
-  // Category chips (incl. 全部) reset AI/search keyword so the list is not stuck filtered
+  // Category chips (incl. 全部) reset search keyword so the list is not stuck filtered
   currentKeyword = '';
+  const searchInput = document.getElementById('dishSearchInput');
+  if (searchInput) searchInput.value = '';
   renderCategories();
   filterAndRender();
 }
@@ -853,14 +859,46 @@ function cartCount() {
   return cart.reduce((s, i) => s + i.quantity, 0);
 }
 
-function cartTotal() {
-  let total = 0;
-  let pt = '爱心币';
+function cartTotalsMap() {
+  const map = new Map();
   cart.forEach(i => {
-    total += Number(i.price) * i.quantity;
-    pt = i.priceType || pt;
+    const pt = i.priceType || '爱心币';
+    const add = Number(i.price) * Number(i.quantity || 0);
+    map.set(pt, (map.get(pt) || 0) + (Number.isFinite(add) ? add : 0));
   });
-  return { total, pt };
+  return map;
+}
+function formatTotalsMap(map) {
+  if (!map || !map.size) return '0 爱心币';
+  const order = ['爱心币', '亲亲', '抱抱'];
+  const keys = Array.from(map.keys()).sort((a, b) => {
+    const ia = order.indexOf(a);
+    const ib = order.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  const parts = keys.filter(k => map.get(k) > 0).map(k => map.get(k) + ' ' + k);
+  return parts.length ? parts.join(' + ') : '0 爱心币';
+}
+function formatCartTotals() {
+  return formatTotalsMap(cartTotalsMap());
+}
+function formatOrderPrice(o) {
+  if (!o) return '0 爱心币';
+  if (o.priceSummary) return o.priceSummary;
+  const pt = String(o.priceType || '').trim();
+  if (/\d/.test(pt) && (pt.includes('+') || pt.includes('币') || pt.includes('亲') || pt.includes('抱'))) {
+    return pt.replace(/\+/g, ' + ');
+  }
+  const total = o.totalPrice ?? o.totalAmount ?? o.amount ?? 0;
+  if (pt === '多币种') return '多币种';
+  return total + ' ' + (pt || '爱心币');
+}
+function itemPriceText(it) {
+  const remark = String((it && it.remark) || '');
+  const matched = remark.match(/\[币种:([^\]]+)\]/);
+  const pt = matched ? matched[1] : (it && it.priceType ? it.priceType : '');
+  const price = it && it.price != null ? it.price : '';
+  return price === '' ? '' : (price + (pt ? (' ' + pt) : ''));
 }
 
 function updateCartBadge() {
@@ -906,8 +944,7 @@ function renderCart() {
       '</div>' +
     '</div>'
   )).join('');
-  const t = cartTotal();
-  document.getElementById('cartTotal').textContent = t.total + ' ' + t.pt;
+  document.getElementById('cartTotal').textContent = formatCartTotals();
 }
 
 function chgQty(idx, d) {
@@ -960,7 +997,8 @@ async function submitOrder() {
       body: JSON.stringify(orderData)
     });
     if (r.code === 200) {
-      toast(r.message || '下单成功 💕');
+      const summary = r.data && r.data.priceSummary;
+      toast(summary ? ('下单成功 ' + summary) : (r.message || '下单成功 💕'));
       cart = [];
       updateCartBadge();
       hideCart();
@@ -1241,18 +1279,19 @@ function renderOrders(orders) {
           escapeAttr(o.orderNo) + '\',\'' + n.status + '\')">' + n.label + '</button>';
       });
     }
+    const orderNo = o.orderNo || ('#' + o.id);
     return (
       '<div class="order-card">' +
         '<div class="order-top">' +
           '<div>' +
-            '<div class="order-no">' + time + '</div>' +
-            '<div class="order-time">' +
-              (isChef() && o.userId ? '用户 #' + o.userId : '点击详情查看') +
+            '<div class="order-no">' + escapeHtml(orderNo) + '</div>' +
+            '<div class="order-time">' + time +
+              (isChef() && o.userId ? (' · 用户 #' + o.userId) : '') +
             '</div>' +
           '</div>' +
           '<span class="status-pill status-' + escapeAttr(ns) + '">' + st + '</span>' +
         '</div>' +
-        '<div class="order-sum">合计 <strong>' + o.totalPrice + ' ' + escapeHtml(o.priceType || '') + '</strong>' +
+        '<div class="order-sum">合计 <strong>' + escapeHtml(formatOrderPrice(o)) + '</strong>' +
           (o.remark ? '<div class="order-remark">备注：' + escapeHtml(o.remark) + '</div>' : '') +
         '</div>' +
         '<div class="order-actions">' + actions + '</div>' +
@@ -1302,9 +1341,11 @@ async function viewOrder(id) {
           list.map(it =>
             '<div class="detail-item">' +
               '<span class="di-name">' + escapeHtml(it.dishName || it.name || '菜品') +
-                (it.remark ? ' <small style="color:var(--muted)">(' + escapeHtml(it.remark) + ')</small>' : '') +
+                (it.remark ? ' <small style="color:var(--muted)">(' + escapeHtml(String(it.remark).replace(/\s*\[币种:[^\]]+\]/, '')) + ')</small>' : '') +
               '</span>' +
-              '<span class="di-qty">×' + (it.quantity || 1) + '</span>' +
+              '<span class="di-qty">×' + (it.quantity || 1) +
+                (itemPriceText(it) ? (' · ' + escapeHtml(itemPriceText(it))) : '') +
+              '</span>' +
             '</div>'
           ).join('') +
         '</div>';
@@ -1313,12 +1354,13 @@ async function viewOrder(id) {
         (ns === 'completed' ? o.updatedAt : null);
       const finishTime = finishRaw ? new Date(finishRaw).toLocaleString('zh-CN') : '';
       body.innerHTML =
+        '<div class="detail-row"><span class="k">订单号</span><span class="v">' + escapeHtml(o.orderNo || ('#' + (o.id || ''))) + '</span></div>' +
         '<div class="detail-row"><span class="k">状态</span><span class="v"><span class="status-pill status-' +
           escapeAttr(ns) + '">' + st + '</span></span></div>' +
         '<div class="detail-row"><span class="k">下单时间</span><span class="v">' + time + '</span></div>' +
         (finishTime ? '<div class="detail-row"><span class="k">完成时间</span><span class="v">' + finishTime + '</span></div>' : '') +
         '<div class="detail-row"><span class="k">合计</span><span class="v" style="color:var(--rose);font-weight:750">' +
-          o.totalPrice + ' ' + escapeHtml(o.priceType || '') + '</span></div>' +
+          escapeHtml(formatOrderPrice(o)) + '</span></div>' +
         (o.remark ? '<div class="detail-row"><span class="k">备注</span><span class="v">' + escapeHtml(o.remark) + '</span></div>' : '') +
         itemsHtml;
       let footBtns = '';
