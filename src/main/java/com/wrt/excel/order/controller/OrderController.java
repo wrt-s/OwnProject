@@ -7,6 +7,7 @@ import com.wrt.excel.order.service.AuthService;
 import com.wrt.excel.order.service.CoinService;
 import com.wrt.excel.order.service.DashboardService;
 import com.wrt.excel.order.service.OrderService;
+import com.wrt.excel.system.exception.ApiErrors;
 import com.wrt.excel.system.interfance.OperationLogAnnotation;
 import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +50,11 @@ public class OrderController {
     public Map<String, Object> createOrder(@RequestBody OrderRequestDTO request, HttpSession session) {
         Map<String, Object> result = new HashMap<>();
         try {
+            if (request == null) {
+                result.put("code", 400);
+                result.put("message", "缺少订单参数");
+                return result;
+            }
             Long userId = AuthService.forceSessionUserId(session, request.getUserId());
             request.setUserId(userId);
             Order order = orderService.createOrder(request);
@@ -56,13 +62,17 @@ public class OrderController {
             Integer balance = coinService.getBalance(userId);
             
             result.put("code", 200);
-            result.put("message", "下单成功！马上为你准备~ 💕");
+            String summary = order.getPriceSummary();
+            result.put("message", summary == null || summary.isBlank()
+                    ? "下单成功！马上为你准备~ 💕"
+                    : ("下单成功！" + summary + " 💕"));
             result.put("data", order);
             result.put("balance", balance);
         } catch (Exception e) {
-            log.error("创建订单失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            if (!(e instanceof IllegalArgumentException) && !(e instanceof IllegalStateException)) {
+                log.error("创建订单失败", e);
+            }
+            ApiErrors.fill(result, e);
         }
         return result;
     }
@@ -81,8 +91,7 @@ public class OrderController {
             result.put("data", orders);
         } catch (Exception e) {
             log.error("获取订单列表失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            ApiErrors.fill(result, e);
         }
         return result;
     }
@@ -100,8 +109,7 @@ public class OrderController {
             result.put("data", orders);
         } catch (Exception e) {
             log.error("获取订单列表失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            ApiErrors.fill(result, e);
         }
         return result;
     }
@@ -138,8 +146,7 @@ public class OrderController {
             result.put("data", orderDetail);
         } catch (Exception e) {
             log.error("获取订单详情失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            ApiErrors.fill(result, e);
         }
         return result;
     }
@@ -162,9 +169,10 @@ public class OrderController {
             result.put("code", 200);
             result.put("message", "状态更新成功");
         } catch (Exception e) {
-            log.error("更新订单状态失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            if (!(e instanceof IllegalArgumentException)) {
+                log.error("更新订单状态失败", e);
+            }
+            ApiErrors.fill(result, e);
         }
         return result;
     }
@@ -183,7 +191,12 @@ public class OrderController {
     public Map<String, Object> cancelOrder(@RequestBody Map<String, Object> params, HttpSession session) {
         Map<String, Object> result = new HashMap<>();
         try {
-            String orderNo = (String) params.get("orderNo");
+            if (params == null || params.get("orderNo") == null || String.valueOf(params.get("orderNo")).isBlank()) {
+                result.put("code", 400);
+                result.put("message", "缺少订单号");
+                return result;
+            }
+            String orderNo = String.valueOf(params.get("orderNo"));
             Long clientUid = params.get("userId") != null ? Long.valueOf(params.get("userId").toString()) : null;
             Long userId = AuthService.forceSessionUserId(session, clientUid);
             
@@ -194,13 +207,11 @@ public class OrderController {
             result.put("code", 200);
             result.put("message", "订单已取消，爱心币已退回");
             result.put("balance", balance);
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            result.put("code", 400);
-            result.put("message", e.getMessage());
         } catch (Exception e) {
-            log.error("取消订单失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            if (!(e instanceof IllegalArgumentException) && !(e instanceof IllegalStateException)) {
+                log.error("取消订单失败", e);
+            }
+            ApiErrors.fill(result, e);
         }
         return result;
     }

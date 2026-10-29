@@ -39,8 +39,8 @@ public class FileUploadService {
     @Value("${love.upload.dir:uploads}")
     private String uploadDir;
 
-    /** Prefer permanent public URL when bucket policy allows; else refreshable object key. */
-    @Value("${minio.public-read:true}")
+    /** Public URL only when explicitly enabled. Default refreshes a presigned GET on each read. */
+    @Value("${minio.public-read:false}")
     private boolean publicRead;
 
     public String uploadImage(MultipartFile file) {
@@ -165,7 +165,10 @@ public class FileUploadService {
         String object = extractObjectKey(s);
         if (object == null || object.isBlank()) return s;
 
-        if (publicRead && minioConfig != null && minioConfig.getEndpoint() != null
+        // Expired presigned URLs 403 even if a public-read flag is on; always re-sign those.
+        boolean expiredPresign = s.contains("X-Amz-Signature") || s.contains("X-Amz-Algorithm")
+                || s.startsWith(MINIO_KEY_PREFIX);
+        if (!expiredPresign && publicRead && minioConfig != null && minioConfig.getEndpoint() != null
                 && !minioConfig.getEndpoint().isBlank()) {
             return buildPublicUrl(object);
         }

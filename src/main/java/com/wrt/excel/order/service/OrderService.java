@@ -16,7 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -53,10 +56,13 @@ public class OrderService {
     /**
      * 创建订单
      */
-    /** 规范化币种：空/未知按爱心币；抱抱/亲亲等软币种不扣爱心币余额 */
+    private static final List<String> CURRENCY_ORDER = List.of("爱心币", "亲亲", "抱抱");
+
+    /** 规范化币种：空/未知按爱心币；抱抱/亲亲等软币种不折算、不扣爱心币余额 */
     public static String normalizePriceType(String raw) {
         if (raw == null || raw.isBlank()) return "爱心币";
         String pt = raw.trim();
+        if ("多币种".equals(pt)) return pt;
         if (pt.contains("抱抱") || "hug".equalsIgnoreCase(pt)) return "抱抱";
         if (pt.contains("亲亲") || "kiss".equalsIgnoreCase(pt)) return "亲亲";
         if (pt.contains("爱心") || "coin".equalsIgnoreCase(pt) || "love".equalsIgnoreCase(pt)) return "爱心币";
@@ -67,15 +73,39 @@ public class OrderService {
         return "爱心币".equals(normalizePriceType(priceType));
     }
 
-    private static String formatPriceSummary(java.util.Map<String, Integer> totalsByType) {
-        if (totalsByType == null || totalsByType.isEmpty()) return "爱心币";
+    /** 展示用分币种合计，币种之间用「 + 」分开，不做汇率折算 */
+    public static String formatPriceSummary(Map<String, Integer> totalsByType) {
+        if (totalsByType == null || totalsByType.isEmpty()) return "0 爱心币";
+        List<String> keys = new ArrayList<>(totalsByType.keySet());
+        keys.sort((a, b) -> {
+            int ia = CURRENCY_ORDER.indexOf(a);
+            int ib = CURRENCY_ORDER.indexOf(b);
+            if (ia < 0) ia = 99;
+            if (ib < 0) ib = 99;
+            if (ia != ib) return Integer.compare(ia, ib);
+            return a.compareTo(b);
+        });
         StringBuilder sb = new StringBuilder();
-        for (java.util.Map.Entry<String, Integer> e : totalsByType.entrySet()) {
-            if (e.getValue() == null || e.getValue() <= 0) continue;
-            if (sb.length() > 0) sb.append('+');
-            sb.append(e.getValue()).append(e.getKey());
+        for (String key : keys) {
+            Integer value = totalsByType.get(key);
+            if (value == null || value <= 0) continue;
+            if (sb.length() > 0) sb.append(" + ");
+            sb.append(value).append(' ').append(key);
         }
-        return sb.length() == 0 ? "爱心币" : sb.toString();
+        return sb.length() == 0 ? "0 爱心币" : sb.toString();
+    }
+
+    /** 落库用短标签，避免把长摘要写进 varchar(20) 的 price_type */
+    private static String shortPriceType(Map<String, Integer> totalsByType) {
+        List<String> positive = new ArrayList<>();
+        if (totalsByType != null) {
+            for (Map.Entry<String, Integer> e : totalsByType.entrySet()) {
+                if (e.getValue() != null && e.getValue() > 0) positive.add(e.getKey());
+            }
+        }
+        if (positive.size() == 1) return positive.get(0);
+        if (positive.isEmpty()) return "爱心币";
+        return "多币种";
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -130,9 +160,11 @@ public class OrderService {
         Order order = new Order();
         order.setOrderNo(orderNo);
         order.setUserId(request.getUserId());
-        // totalPrice 仅记录爱心币金额，供取消退款；软币种记在 priceType 摘要与明细中
+        // totalPrice 只记爱心币，取消时按此退回；亲亲/抱抱不折算进爱心币、也不扣余额
         order.setTotalPrice(loveTotal);
-        order.setPriceType(priceSummary);
+        order.setPriceType(shortPriceType(totalsByType));
+        order.setPriceSummary(priceSummary);
+        order.setCurrencyTotals(new LinkedHashMap<>(totalsByType));
         order.setStatus("pending");
         order.setRemark(request.getRemark());
         order.setCreatedAt(LocalDateTime.now());
@@ -142,7 +174,14 @@ public class OrderService {
         if (loveTotal > 0) {
             coinService.useCoins(request.getUserId(), loveTotal, "use_order",
                     String.format("点单消费(爱心币): %s", orderNo), order.getId());
-        } else {
+        }
+        for (Map.Entry<String, Integer> entry : totalsByType.entrySet()) {
+            if ("爱心币".equals(entry.getKey()) || entry.getValue() == null || entry.getValue() <= 0) {
+                continue;
+            }
+            log.info("订单 {} 记录软币种应付 {} {}（不扣爱心币）", orderNo, entry.getValue(), entry.getKey());
+        }
+        if (loveTotal <= 0) {
             log.info("订单 {} 无爱心币项，跳过扣币（软币种合计 {}）", orderNo, softTotal);
         }
 
@@ -193,7 +232,9 @@ public class OrderService {
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Order::getUserId, userId)
                .orderByDesc(Order::getCreatedAt);
-        return orderMapper.selectList(wrapper);
+        List<Order> orders = orderMapper.selectList(wrapper);
+        enrichPriceSummaries(orders);
+        return orders;
     }
     
     /**
@@ -202,7 +243,9 @@ public class OrderService {
     public List<Order> getAllOrders() {
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
         wrapper.orderByDesc(Order::getCreatedAt);
-        return orderMapper.selectList(wrapper);
+        List<Order> orders = orderMapper.selectList(wrapper);
+        enrichPriceSummaries(orders);
+        return orders;
     }
     
     /**
@@ -218,7 +261,74 @@ public class OrderService {
      * 根据ID获取订单
      */
     public Order getOrderById(Long orderId) {
-        return orderMapper.selectById(orderId);
+        Order order = orderMapper.selectById(orderId);
+        if (order != null) {
+            enrichPriceSummaries(List.of(order));
+        }
+        return order;
+    }
+
+    /**
+     * 按明细上的 [币种:xx] 重算分币种合计，避免把亲亲/抱抱折进爱心币展示。
+     */
+    public void enrichPriceSummaries(List<Order> orders) {
+        if (orders == null || orders.isEmpty()) return;
+        List<Long> ids = new ArrayList<>();
+        for (Order order : orders) {
+            if (order != null && order.getId() != null) ids.add(order.getId());
+        }
+        Map<Long, List<OrderItem>> grouped = new LinkedHashMap<>();
+        if (!ids.isEmpty()) {
+            LambdaQueryWrapper<OrderItem> wrapper = new LambdaQueryWrapper<>();
+            wrapper.in(OrderItem::getOrderId, ids);
+            List<OrderItem> items = orderItemMapper.selectList(wrapper);
+            if (items != null) {
+                for (OrderItem item : items) {
+                    grouped.computeIfAbsent(item.getOrderId(), k -> new ArrayList<>()).add(item);
+                }
+            }
+        }
+        for (Order order : orders) {
+            if (order == null) continue;
+            applyPriceSummary(order, grouped.get(order.getId()));
+        }
+    }
+
+    private void applyPriceSummary(Order order, List<OrderItem> items) {
+        Map<String, Integer> totals = new LinkedHashMap<>();
+        if (items != null) {
+            for (OrderItem item : items) {
+                String pt = currencyFromItem(item, order);
+                int qty = item.getQuantity() == null ? 1 : item.getQuantity();
+                int price = item.getPrice() == null ? 0 : item.getPrice();
+                if (qty > 0 && price > 0) {
+                    totals.merge(pt, price * qty, Integer::sum);
+                }
+            }
+        }
+        if (totals.isEmpty()) {
+            String pt = normalizePriceType(order.getPriceType());
+            int amount = order.getTotalPrice() == null ? 0 : order.getTotalPrice();
+            if ("多币种".equals(pt)) pt = "爱心币";
+            if (amount > 0) totals.put(pt, amount);
+        }
+        order.setCurrencyTotals(totals);
+        order.setPriceSummary(formatPriceSummary(totals));
+    }
+
+    private String currencyFromItem(OrderItem item, Order order) {
+        String remark = item.getRemark();
+        if (remark != null) {
+            int start = remark.indexOf("[币种:");
+            if (start >= 0) {
+                int end = remark.indexOf(']', start);
+                if (end > start) {
+                    return normalizePriceType(remark.substring(start + 4, end));
+                }
+            }
+        }
+        String pt = normalizePriceType(order == null ? null : order.getPriceType());
+        return "多币种".equals(pt) ? "爱心币" : pt;
     }
     
     /**
@@ -407,7 +517,7 @@ public class OrderService {
         StringBuilder description = new StringBuilder();
         description.append("## 💕 新订单通知\n\n");
         description.append("**订单号**: ").append(order.getOrderNo()).append("\n\n");
-        description.append("**总价**: ").append(order.getTotalPrice()).append(" ").append(order.getPriceType()).append("\n\n");
+        description.append("**总价**: ").append(displayPrice(order)).append("\n\n");
         
         if (order.getRemark() != null && !order.getRemark().isEmpty()) {
             description.append("**备注**: ").append(order.getRemark()).append("\n\n");
@@ -441,7 +551,7 @@ public class OrderService {
                 dishSummary.append(dish.getName()).append("x").append(item.getQuantity());
             }
         }
-        String priceText = order.getTotalPrice() + (order.getPriceType() == null ? "" : (" " + order.getPriceType()));
+        String priceText = displayPrice(order);
         String userLabel = "点单方";
         try {
             // nickname optional; keep label simple
@@ -465,6 +575,14 @@ public class OrderService {
         } catch (Exception e) {
             log.error("发送App新订单通知失败: {}", e.getMessage());
         }
+    }
+
+    private static String displayPrice(Order order) {
+        if (order.getPriceSummary() != null && !order.getPriceSummary().isBlank()) {
+            return order.getPriceSummary();
+        }
+        String pt = order.getPriceType() == null ? "爱心币" : order.getPriceType();
+        return (order.getTotalPrice() == null ? 0 : order.getTotalPrice()) + " " + pt;
     }
 
     private String buildDishSummary(Long orderId) {

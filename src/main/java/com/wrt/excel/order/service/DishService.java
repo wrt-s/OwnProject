@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.wrt.excel.order.entity.Dish;
 import com.wrt.excel.order.mapper.DishMapper;
 import com.wrt.excel.order.vo.DishVO;
+import com.wrt.excel.system.service.FileUploadService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,20 @@ public class DishService {
     @Autowired
     @Lazy
     private DeepSeekService deepSeekService;
+
+    @Autowired(required = false)
+    private FileUploadService fileUploadService;
+
+    /** Refresh MinIO signatures (or public URL) without persisting the temporary link. */
+    public void refreshImage(Dish dish) {
+        if (dish == null || fileUploadService == null) return;
+        dish.setImageUrl(fileUploadService.toReadableUrl(dish.getImageUrl()));
+    }
+
+    public String readableImage(String stored) {
+        if (fileUploadService == null) return stored;
+        return fileUploadService.toReadableUrl(stored);
+    }
     
     /**
      * 获取所有菜品（转换为VO）- 默认只显示在售菜品
@@ -250,7 +265,7 @@ public class DishService {
         return dishes.stream().map(dish -> {
             DishVO vo = new DishVO();
             BeanUtils.copyProperties(dish, vo);
-            // 这里可以添加分类名称等信息
+            vo.setImageUrl(readableImage(dish.getImageUrl()));
             return vo;
         }).collect(Collectors.toList());
     }

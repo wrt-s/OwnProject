@@ -3,6 +3,7 @@ package com.wrt.excel.order.controller;
 import com.wrt.excel.order.entity.Dish;
 import com.wrt.excel.order.service.DishService;
 import com.wrt.excel.order.vo.DishVO;
+import com.wrt.excel.system.exception.ApiErrors;
 import com.wrt.excel.system.interfance.OperationLogAnnotation;
 import com.wrt.excel.system.service.FileUploadService;
 import lombok.extern.slf4j.Slf4j;
@@ -82,6 +83,11 @@ public class DishController {
     public Map<String, Object> addDish(@RequestBody Dish dish) {
         Map<String, Object> result = new HashMap<>();
         try {
+            if (dish == null || dish.getName() == null || dish.getName().isBlank()) {
+                result.put("code", 400);
+                result.put("message", "缺少菜品名称");
+                return result;
+            }
             // 设置默认值
             if (dish.getIsSoldOut() == null) {
                 dish.setIsSoldOut(0);
@@ -117,8 +123,7 @@ public class DishController {
             }
         } catch (Exception e) {
             log.error("添加菜品失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            ApiErrors.fill(result, e);
         }
         return result;
     }
@@ -214,6 +219,7 @@ public class DishController {
                 result.put("message", "暂时没有可推荐的菜品");
                 return result;
             }
+            dishService.refreshImage(dish);
             result.put("code", 200);
             result.put("message", "success");
             result.put("data", dish);
@@ -269,6 +275,16 @@ public class DishController {
     public Map<String, Object> updateDish(@RequestBody Dish dish) {
         Map<String, Object> result = new HashMap<>();
         try {
+            if (dish == null || dish.getId() == null) {
+                result.put("code", 400);
+                result.put("message", "缺少菜品ID");
+                return result;
+            }
+            if (dishService.getDishById(dish.getId()) == null) {
+                result.put("code", 404);
+                result.put("message", "菜品不存在");
+                return result;
+            }
             boolean success = dishService.updateDish(dish);
             if (success) {
                 result.put("code", 200);
@@ -279,8 +295,7 @@ public class DishController {
             }
         } catch (Exception e) {
             log.error("更新菜品失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            ApiErrors.fill(result, e);
         }
         return result;
     }
@@ -292,8 +307,18 @@ public class DishController {
     public Map<String, Object> toggleSoldOut(@RequestBody Map<String, Object> params) {
         Map<String, Object> result = new HashMap<>();
         try {
+            if (params == null || params.get("dishId") == null) {
+                result.put("code", 400);
+                result.put("message", "缺少菜品ID");
+                return result;
+            }
             Long dishId = Long.valueOf(params.get("dishId").toString());
-            Integer currentStatus = Integer.valueOf(params.get("isSoldOut").toString());
+            if (dishService.getDishById(dishId) == null) {
+                result.put("code", 404);
+                result.put("message", "菜品不存在");
+                return result;
+            }
+            Integer currentStatus = params.get("isSoldOut") == null ? 0 : Integer.valueOf(params.get("isSoldOut").toString());
             
             boolean success = dishService.toggleSoldOut(dishId, currentStatus);
             if (success) {
@@ -305,8 +330,7 @@ public class DishController {
             }
         } catch (Exception e) {
             log.error("切换菜品售罄状态失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            ApiErrors.fill(result, e);
         }
         return result;
     }
@@ -390,6 +414,16 @@ public class DishController {
     public Map<String, Object> deleteDish(@PathVariable Long id) {
         Map<String, Object> result = new HashMap<>();
         try {
+            if (id == null) {
+                result.put("code", 400);
+                result.put("message", "缺少菜品ID");
+                return result;
+            }
+            if (dishService.getDishById(id) == null) {
+                result.put("code", 404);
+                result.put("message", "菜品不存在");
+                return result;
+            }
             boolean success = dishService.deleteDish(id);
             if (success) {
                 result.put("code", 200);
@@ -400,8 +434,7 @@ public class DishController {
             }
         } catch (Exception e) {
             log.error("删除菜品失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            ApiErrors.fill(result, e);
         }
         return result;
     }

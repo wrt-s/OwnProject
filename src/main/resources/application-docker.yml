@@ -58,15 +58,15 @@ provincial:
   api:
     url: http://localhost:8081/provincial
 
-# Actuator 监控配置
+# Actuator：生产/Docker 只匿名暴露 health（其余路径由拦截器拒绝）
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: never
 
 # 日志配置（生产环境）
 logging:

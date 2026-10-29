@@ -25,18 +25,42 @@ public class BettingController {
     public Map<String, Object> placeBet(@RequestBody Map<String, Object> params, HttpSession session) {
         Map<String, Object> result = new HashMap<>();
         try {
+            if (params == null || params.get("betType") == null) {
+                result.put("code", 400);
+                result.put("success", false);
+                result.put("message", "缺少押注参数");
+                return result;
+            }
+            Object amountRaw = params.get("betAmount") != null ? params.get("betAmount") : params.get("amount");
+            if (amountRaw == null) {
+                result.put("code", 400);
+                result.put("success", false);
+                result.put("message", "缺少押注金额");
+                return result;
+            }
             Long clientUid = params.get("userId") != null ? Long.valueOf(params.get("userId").toString()) : null;
             Long userId = AuthService.forceSessionUserId(session, clientUid);
-            Integer betAmount = Integer.valueOf(params.get("betAmount").toString());
+            Integer betAmount = Integer.valueOf(amountRaw.toString());
             String betType = params.get("betType").toString();
             
             log.info("用户 {} 请求押注，金额：{}，类型：{}", userId, betAmount, betType);
             
-            return bettingService.placeBet(userId, betAmount, betType);
+            Map<String, Object> placed = bettingService.placeBet(userId, betAmount, betType);
+            boolean ok = Boolean.TRUE.equals(placed.get("success"));
+            placed.put("code", ok ? 200 : 400);
+            if (placed.get("diceResult") != null) {
+                placed.put("dice", placed.get("diceResult"));
+                placed.put("point", placed.get("diceResult"));
+            }
+            placed.put("payout", placed.get("rewardAmount"));
+            placed.put("winAmount", placed.get("rewardAmount"));
+            placed.put("win", Boolean.TRUE.equals(placed.get("isWin")));
+            return placed;
         } catch (Exception e) {
             log.error("押注失败", e);
+            result.put("code", 400);
             result.put("success", false);
-            result.put("message", "押注失败：" + e.getMessage());
+            result.put("message", e instanceof NullPointerException ? "参数不完整" : ("押注失败：" + e.getMessage()));
             return result;
         }
     }

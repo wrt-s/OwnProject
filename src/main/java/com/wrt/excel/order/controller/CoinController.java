@@ -3,6 +3,7 @@ package com.wrt.excel.order.controller;
 import com.wrt.excel.order.entity.CoinTransaction;
 import com.wrt.excel.order.service.AuthService;
 import com.wrt.excel.order.service.CoinService;
+import com.wrt.excel.system.exception.ApiErrors;
 import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,20 +23,22 @@ public class CoinController {
     
     @Autowired
     private CoinService coinService;
+
+    @Autowired
+    private AuthService authService;
     
     @GetMapping("/balance/{userId}")
     public Map<String, Object> getBalance(@PathVariable Long userId, HttpSession session) {
         Map<String, Object> result = new HashMap<>();
         try {
-            Long uid = AuthService.resolveTargetUserId(session, userId);
+            Long uid = authService.resolveCoinTarget(session, userId);
             Integer balance = coinService.getBalance(uid);
             result.put("code", 200);
             result.put("message", "success");
             result.put("data", balance);
         } catch (Exception e) {
             log.error("获取余额失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            ApiErrors.fill(result, e);
         }
         return result;
     }
@@ -52,8 +55,7 @@ public class CoinController {
             result.put("data", balance);
         } catch (Exception e) {
             log.error("获取余额失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            ApiErrors.fill(result, e);
         }
         return result;
     }
@@ -62,9 +64,14 @@ public class CoinController {
     public Map<String, Object> addCoins(@RequestBody Map<String, Object> params, HttpSession session) {
         Map<String, Object> result = new HashMap<>();
         try {
+            if (params == null || params.get("amount") == null) {
+                result.put("code", 400);
+                result.put("message", "缺少数量");
+                return result;
+            }
             Long clientUid = params.get("userId") != null ? Long.valueOf(params.get("userId").toString()) : null;
-            // CHEF 可给他人加币；ORDERER 不可达此接口（拦截器）
-            Long userId = AuthService.resolveTargetUserId(session, clientUid);
+            // CHEF 只能给同一家庭加币；ORDERER 不可达此接口（拦截器）
+            Long userId = authService.resolveCoinTarget(session, clientUid);
             Integer amount = Integer.valueOf(params.get("amount").toString());
             Object descObj = params.get("description") != null ? params.get("description") : params.get("remark");
             String description = descObj != null ? descObj.toString() : null;
@@ -78,8 +85,7 @@ public class CoinController {
             result.put("data", newBalance);
         } catch (Exception e) {
             log.error("增加爱心币失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            ApiErrors.fill(result, e);
         }
         return result;
     }
@@ -88,8 +94,13 @@ public class CoinController {
     public Map<String, Object> useCoins(@RequestBody Map<String, Object> params, HttpSession session) {
         Map<String, Object> result = new HashMap<>();
         try {
+            if (params == null || params.get("amount") == null) {
+                result.put("code", 400);
+                result.put("message", "缺少数量");
+                return result;
+            }
             Long clientUid = params.get("userId") != null ? Long.valueOf(params.get("userId").toString()) : null;
-            Long userId = AuthService.resolveTargetUserId(session, clientUid);
+            Long userId = authService.resolveCoinTarget(session, clientUid);
             Integer amount = Integer.valueOf(params.get("amount").toString());
             String type = params.get("type") != null ? params.get("type").toString() : "CONSUME";
             Object descObjUse = params.get("description") != null ? params.get("description") : params.get("remark");
@@ -104,8 +115,7 @@ public class CoinController {
             result.put("data", newBalance);
         } catch (Exception e) {
             log.error("使用爱心币失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            ApiErrors.fill(result, e);
         }
         return result;
     }
@@ -114,15 +124,14 @@ public class CoinController {
     public Map<String, Object> getTransactions(@PathVariable Long userId, HttpSession session) {
         Map<String, Object> result = new HashMap<>();
         try {
-            Long uid = AuthService.resolveTargetUserId(session, userId);
+            Long uid = authService.resolveCoinTarget(session, userId);
             List<CoinTransaction> transactions = coinService.getTransactions(uid);
             result.put("code", 200);
             result.put("message", "success");
             result.put("data", transactions);
         } catch (Exception e) {
             log.error("获取流水记录失败", e);
-            result.put("code", 500);
-            result.put("message", e.getMessage());
+            ApiErrors.fill(result, e);
         }
         return result;
     }
