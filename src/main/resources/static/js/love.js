@@ -266,6 +266,21 @@ function persistUser(u) {
   localStorage.setItem('love_user_id', String(u.id));
 }
 
+function paintPersonAvatar(el, url, fallback) {
+  if (!el) return;
+  while (el.firstChild) el.removeChild(el.firstChild);
+  const photo = !!(url && String(url).trim());
+  el.classList.toggle('has-photo', photo);
+  if (photo) {
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = url;
+    el.appendChild(img);
+  } else {
+    el.textContent = fallback || '💕';
+  }
+}
+
 function applyRoleUI() {
   document.body.classList.toggle('is-chef', isChef());
   startHeartbeat();
@@ -273,6 +288,8 @@ function applyRoleUI() {
   /* LoveAppNotify disabled (no phone system notifications) */
   const nameEl = document.getElementById('mineNickname');
   if (nameEl) nameEl.textContent = currentUser.nickname;
+  paintPersonAvatar(document.getElementById('headerAvatar'), currentUser.avatarUrl, '💕');
+  paintPersonAvatar(document.getElementById('mineAvatar'), currentUser.avatarUrl, '💕');
   const badge = document.getElementById('mineRoleBadge');
   if (badge) {
     badge.className = 'role-badge ' + (isChef() ? 'chef' : 'orderer');
@@ -1535,12 +1552,14 @@ async function loadPartnerOnline() {
     const d = (r && r.code === 200 && r.data) ? r.data : null;
     if (!d) {
       nameEl.textContent = '点单方';
+      paintPersonAvatar(document.getElementById('partnerOnlineAvatar'), '', '🍜');
       if (metaEl) metaEl.textContent = '暂无状态';
       if (dotEl) dotEl.style.background = '#bbb';
       return;
     }
     const online = !!d.online;
     nameEl.textContent = d.nickname || '点单方';
+    paintPersonAvatar(document.getElementById('partnerOnlineAvatar'), d.avatarUrl, '🍜');
     if (metaEl) metaEl.textContent = online ? '在线' : ('离线 · ' + (d.lastSeenText || d.lastSeen || '暂无记录'));
     if (dotEl) {
       dotEl.style.background = online ? 'var(--ok, #22c55e)' : '#bbb';

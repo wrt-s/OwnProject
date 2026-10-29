@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.wrt.excel.order.entity.User;
 import com.wrt.excel.order.mapper.UserMapper;
 import jakarta.servlet.http.HttpSession;
+import com.wrt.excel.system.service.FileUploadService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
@@ -32,6 +33,18 @@ public class AuthService {
     public static final Long DEFAULT_FAMILY_ID = 1L;
 
     private final UserMapper userMapper;
+    private final FileUploadService fileUploadService;
+
+    /**
+     * 与登录校验相同的 MD5（UTF-8 小写十六进制）。
+     * 保持该算法，避免已有账号无法登录。
+     */
+    public static String hashPassword(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return DigestUtils.md5DigestAsHex(raw.getBytes(StandardCharsets.UTF_8));
+    }
 
     public User login(String phone, String password, HttpSession session) {
         if (!StringUtils.hasText(phone) || !StringUtils.hasText(password)) {
@@ -44,7 +57,7 @@ public class AuthService {
         if (user == null) {
             throw new IllegalArgumentException("账号不存在");
         }
-        String md5 = DigestUtils.md5DigestAsHex(password.getBytes(StandardCharsets.UTF_8));
+        String md5 = hashPassword(password);
         if (user.getPassword() == null || !user.getPassword().equalsIgnoreCase(md5)) {
             throw new IllegalArgumentException("密码错误");
         }
@@ -115,10 +128,22 @@ public class AuthService {
         m.put("role", user.normalizedRole());
         m.put("familyId", user.getFamilyId() != null ? user.getFamilyId() : DEFAULT_FAMILY_ID);
         m.put("roleLabel", user.isChef() ? "做餐方" : "点单方");
-        m.put("avatarUrl", user.getAvatarUrl());
+        m.put("avatarUrl", readableAvatar(user.getAvatarUrl()));
         m.put("themeColor", user.getThemeColor());
         m.put("lastLoginTime", user.getLastLoginTime());
         return m;
+    }
+
+    /** 把头像存储值（本地路径 / MinIO key / 公网地址）转成当前可访问 URL。 */
+    public String readableAvatar(String stored) {
+        if (stored == null || stored.isBlank() || fileUploadService == null) {
+            return stored;
+        }
+        try {
+            return fileUploadService.toReadableUrl(stored);
+        } catch (Exception e) {
+            return stored;
+        }
     }
 
     public static Long sessionUserId(HttpSession session) {

@@ -5,6 +5,7 @@ import com.wrt.excel.order.entity.FamilyMemberLocation;
 import com.wrt.excel.order.entity.User;
 import com.wrt.excel.order.mapper.FamilyMemberLocationMapper;
 import com.wrt.excel.order.mapper.UserMapper;
+import com.wrt.excel.system.service.FileUploadService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
@@ -48,6 +49,9 @@ public class FamilyMemberLocationService {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired(required = false)
+    private FileUploadService fileUploadService;
 
     @Autowired
     private AmapRegeoService amapRegeoService;
@@ -242,6 +246,7 @@ public class FamilyMemberLocationService {
             String nick = u.getNickname() != null ? u.getNickname() : "家人";
             String role = u.normalizedRole();
             m.put("nickname", nick);
+            m.put("avatarUrl", readableAvatar(u.getAvatarUrl()));
             m.put("role", role);
             m.put("roleLabel", u.isChef() ? "做餐方" : "点单方");
             m.put("self", Objects.equals(u.getId(), chefUserId));
@@ -287,10 +292,7 @@ public class FamilyMemberLocationService {
                 String ago = formatAgo(loc.getUpdatedAt(), now);
                 m.put("agoText", ago);
                 m.put("lastSeenText", ago != null ? ("上次上报 · " + ago) : "已有位置");
-                // 用库中快照昵称/角色（若有）覆盖展示
-                if (loc.getNickname() != null && !loc.getNickname().isBlank()) {
-                    m.put("nickname", loc.getNickname());
-                }
+                // 昵称以用户表为准，个人资料改名后立刻生效；角色仍可用上报快照
                 if (loc.getRole() != null && !loc.getRole().isBlank()) {
                     String r = loc.getRole().trim().toUpperCase();
                     m.put("role", r);
@@ -391,5 +393,14 @@ public class FamilyMemberLocationService {
     public static String formatAbsolute(LocalDateTime t) {
         if (t == null) return null;
         return t.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    private String readableAvatar(String stored) {
+        if (stored == null || stored.isBlank() || fileUploadService == null) return stored;
+        try {
+            return fileUploadService.toReadableUrl(stored);
+        } catch (Exception e) {
+            return stored;
+        }
     }
 }

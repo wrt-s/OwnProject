@@ -90,6 +90,17 @@ button, input, textarea { font-family: inherit; }
   font-size: 18px;
   box-shadow: 0 4px 12px rgba(232, 90, 122, 0.28);
   flex-shrink: 0;
+  text-decoration: none;
+  overflow: hidden;
+}
+.brand-mark.has-photo { background: #fff; }
+.brand-mark img,
+.mine-hero .avatar img,
+.person-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .brand-text { min-width: 0; }
 .brand-name {
@@ -886,7 +897,24 @@ a.anni-chip:active,
   display: flex; align-items: center; justify-content: center;
   font-size: 32px;
   box-shadow: var(--shadow);
+  text-decoration: none;
+  color: inherit;
+  overflow: hidden;
 }
+.mine-hero .avatar.has-photo { font-size: 0; }
+.person-avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid var(--rose-line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.person-avatar.has-photo { font-size: 0; }
 .mine-hero .uname {
   font-size: 17px; font-weight: 750; margin-top: 10px;
 }

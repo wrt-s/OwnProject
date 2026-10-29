@@ -28,6 +28,12 @@ public class PageController {
         return "login";
     }
 
+    /** 个人资料：昵称、头像、密码 */
+    @GetMapping("/profile")
+    public String profile() {
+        return "profile";
+    }
+
     @GetMapping("/admin")
     public String admin() {
         return "admin";

@@ -8,7 +8,7 @@ USE love_order_system;
 CREATE TABLE `user` (
     `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID',
     `nickname` VARCHAR(50) NOT NULL DEFAULT '公主' COMMENT '昵称',
-    `avatar_url` VARCHAR(255) COMMENT '头像URL',
+    `avatar_url` VARCHAR(1000) COMMENT '头像URL',
     `theme_color` VARCHAR(20) DEFAULT '#FFB6C1' COMMENT '主题颜色',
     `birthday` DATE COMMENT '生日',
     `period_start_date` DATE COMMENT '生理期开始日期',
